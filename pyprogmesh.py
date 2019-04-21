@@ -171,6 +171,7 @@ class CollapseVertex:
                     same_neighbors = False
                     break
             if same_neighbors:
+                raw_input("ERROR: ComputeCost() same neighbors detected.")
                 return 999999.9
         curvature = 0.001
         sides = list()
@@ -541,14 +542,15 @@ class ProgMesh:
         return (newVertCount, new_Verts, newFaceCount, new_Faces)
         
 
-##def main():
-##    _verts = [ [0,0,0], [1,0,0], [0,1,0], [0,0,1] ]
-##    _faces = [[0,1,2], [1,3,0], [0,2,3]]
-##    p = ProgMesh(vertCount=len(_verts), faceCount=3, verts=_verts, faces=_faces)
-##    p.ComputeProgressiveMesh()
-##    print p.DoProgressiveMesh(0.5)
-##
-##if __name__ == '__main__':
-##    main()
+def main():
+    # cube: 6 points, 6 quads, 12 triangles
+    _verts = [ [0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1], [1,0,1], [1,1,1], [0,1,1] ]
+    _faces = [ [0,1,2], [0,2,3], [0,1,5], [0,5,4], [4,5,6], [4,6,7], [1,2,6], [1,6,5], [0,3,7], [0,7,4], [2,3,7], [2,7,6] ]
+    p = ProgMesh(vertCount=len(_verts), faceCount=len(_faces), verts=_verts, faces=_faces)
+    p.ComputeProgressiveMesh()
+    print p.DoProgressiveMesh(0.5)
+
+if __name__ == '__main__':
+    main()
 
 
