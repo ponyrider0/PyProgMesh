@@ -11,9 +11,9 @@ from collections import defaultdict
 import time
 
 class Triangle:
-    v1 = 0
-    v2 = 0
-    v3 = 0
+##    v1 = None
+##    v2 = None
+##    v3 = None
     def __init__(self, _verts):
         self.v1 = _verts[0]
         self.v2 = _verts[1]
@@ -23,11 +23,15 @@ def SortByCost(u, v):
     return (u.Cost > v.Cost)
 
 class DXVertex:
-    Position = [0.0, 0.0, 0.0]
-    Normal = [0.0, 0.0, 0.0]
-    Diffuse = [0, 0, 0, 0]
-    texCoord = [0.0, 0.0]
+##    Position = None
+##    Normal = None
+##    Diffuse = None
+##    texCoord = None
     def __init__(self, position=None, normal=None, vc=None, uv=None):
+        Position = [0.0, 0.0, 0.0]
+        Normal = [0.0, 0.0, 0.0]
+        Diffuse = [0, 0, 0, 0]
+        texCoord = [0.0, 0.0]
         if position is not None:
             self.Position = position
         if normal is not None:
@@ -43,17 +47,17 @@ class DXVertex:
 #
 ##########################################################
 class CollapseVertex:
-    Neighbors = list()
-    Faces = list()
-    Vert = DXVertex()
-    ID = 0
-    Cost = 0.0
-    Candidate = None
-    Duplicate = 0
-    use_cost = False
-    parent = None
-    n_costs = defaultdict(list)
-    border = False
+##    Neighbors = None
+##    Faces = None
+##    Vert = None
+##    ID = None
+##    Cost = None
+##    Candidate = None
+##    Duplicate = None
+##    use_cost = False
+##    parent = None
+##    n_costs = None
+##    border = False
     def __init__(self, _parent, _ID, _use_cost=False):
         self.parent = _parent
         self.ID = _ID
@@ -63,13 +67,16 @@ class CollapseVertex:
         self.Candidate = None
         self.Duplicate = False
         self.border = False
+        self.Neighbors = list()
+        self.Faces = list()
+        self.n_costs = defaultdict(list)
         return
     def IsNeighbor(self, v):
         if v in self.Neighbors:
             return True
         return False
     def AddNeighbor(self, v):
-#        print "DEBUG: AddNeighbor()..."
+        print "  DEBUG: AddNeighbor() called on v.ID = [%d]:" % (v.ID)
         if (not self.IsNeighbor(v)) and (v is not self):
             self.Neighbors.append(v)
             if self.use_cost:
@@ -98,13 +105,19 @@ class CollapseVertex:
                 return True
         return False
     def AddFace(self, f):
-#        print "DEBUG: AddFace()..."
+        print "  DEBUG: CollapseVertex.AddFace(f) called by v.ID[%d]:" % (self.ID)
         if not self.IsFace(f):
+            print "  DEBUG: f is not in v.ID[%d]'s Faces list (#%d), adding..." % (self.ID, len(self.Faces))
             self.Faces.append(f)
+            print "  DEBUG: adding f's vertices as neighbors (#%d)..." % (len(f.vertex))
             for v in f.vertex:
                 if v == self:
+                    print "  DEBUG: f.vertex[%d] is this vertex, skipping" % (f.vertex.index(v))
                     continue
+                print "  DEBUG: f.vertex[%d] -- adding as neighbor..." % (f.vertex.index(v))
                 self.AddNeighbor(v)
+        else:
+            print "  DEBUG: f is already in v.ID[%d]'s Faces list (#%d), skipping." % (self.ID, len(self.Faces))
         return
     def RemoveFace(self, f):
         if self.IsFace(f):
@@ -171,7 +184,7 @@ class CollapseVertex:
                     same_neighbors = False
                     break
             if same_neighbors:
-                raw_input("ERROR: ComputeCost() same neighbors detected.")
+#                raw_input("ERROR: ComputeCost() same neighbors detected.")
                 return 999999.9
         curvature = 0.001
         sides = list()
@@ -209,17 +222,28 @@ class CollapseVertex:
 #
 ##########################################################
 class CollapseTriangle:
-    vertex = None
-    normal = [0.0, 0.0, 0.0]
+##    vertex = None
+##    normal = None
     def __init__(self, v1, v2, v3):
+        self.normal = [0.0, 0.0, 0.0]
 #        del self.vertex[:]
         self.vertex = [v1, v2, v3]
 #        self.vertex.append(v1)
 #        self.vertex.append(v2)
 #        self.vertex.append(v3)
+        print "================================="
+        print "================================="
+        print "DEBUG: CollapseTriangle creation: [%d, %d, %d]" % (v1.ID, v2.ID, v3.ID)
+        print "================================="
+        print "================================="
         for v_self in self.vertex:
+            print "v[%d], v.ID=[%d]: AddFace()..." % (self.vertex.index(v_self), v_self.ID)
             v_self.AddFace(self)
+        print "DEBUG: CollapseTriangle.ComputeNormal()"
         self.ComputeNormal()
+        print "================================="
+        print " END: CollapseTriangle creation."
+        print "================================="
         return
     def HasVertex(self, vert):
         if vert in self.vertex:
@@ -262,7 +286,7 @@ class CollapseTriangle:
 
 class PMarg:
     useedgelength = False
-    usedcurvature = False
+    usecurvature = False
     protecttexture = False
     protectvc = False
     lockborder = False
@@ -275,16 +299,25 @@ class PMarg:
 #
 ##########################################################
 class ProgMesh:
-    Arguments = PMarg()
-    vertices = list()
-    triangles = list()
-    CollapseOrder = list()
-    CollapseMap = dict()
-    VertexCount = 0
-    TriangleCount = 0
-    Faces = list()
-    Verts = list()
+##    Arguments = PMarg()
+##    vertices = list()
+##    triangles = list()
+##    CollapseOrder = list()
+##    CollapseMap = dict()
+##    VertexCount = 0
+##    TriangleCount = 0
+##    Faces = list()
+##    Verts = list()
     def __init__(self, vertCount, faceCount, verts, faces):
+        self.Arguments = PMarg()
+        self.vertices = list()
+        self.triangles = list()
+        self.CollapseOrder = list()
+        self.CollapseMap = dict()
+        self.VertexCount = 0
+        self.TriangleCount = 0
+        self.Faces = list()
+        self.Verts = list()
         t = time.time()
         self.VertexCount = vertCount
         self.TriangleCount = faceCount
@@ -317,7 +350,7 @@ class ProgMesh:
         return False
     def RemoveTriangle(self, t):
         if self.HasTriangle(t):
-            print "DEBUG: RemoveTriangle() called"
+#            print "DEBUG: RemoveTriangle() called"
             self.triangles.remove(t)
             del t
         return
@@ -347,11 +380,11 @@ class ProgMesh:
             v.Candidate = None
             v.Cost = -0.01
             return
-        print "DEBUG: ComputeEdgeCostAtVertex: v.Neighbors #=%d, self.vertices #=%d" % (len(v.Neighbors), len(self.vertices))
-        if len(v.Neighbors) >= (len(self.vertices)-1):
-            print "ERROR: vertex at [%d] is connected to all vertices" % (self.vertices.index(v))
-            raw_input("Press ENTER to continue")
-            return
+#        print "DEBUG: ComputeEdgeCostAtVertex: v.Neighbors #=%d, self.vertices #=%d" % (len(v.Neighbors), len(self.vertices))
+##        if len(v.Neighbors) >= (len(self.vertices)-1):
+##            print "ERROR: vertex at [%d] is connected to all vertices" % (self.vertices.index(v))
+##            raw_input("Press ENTER to continue")
+##            return
         for neighbor in v.Neighbors:
             cost = v.ComputeCost(neighbor)
             v.AddCost(cost, neighbor)
@@ -366,17 +399,17 @@ class ProgMesh:
         return
     def Collapse(self, u, v, recompute=True):
         if v is None:
-            print "DEBUG: Collapse(): u.Faces #=%d, v is None" % (len(u.Faces))
+#            print "DEBUG: Collapse(): u.Faces #=%d, v is None" % (len(u.Faces))
             self.RemoveVertex(u)
             return
-        print "DEBUG: Collapse(): u.Faces #=%d, v is not None" % (len(u.Faces))
+#        print "DEBUG: Collapse(): u.Faces #=%d, v is not None" % (len(u.Faces))
         sides = list()
         for f in u.Faces:
             if f.HasVertex(v):
-                print "DEBUG: Collapse(): adding f to sides"
+#                print "DEBUG: Collapse(): adding f to sides"
                 sides.append(f)
         for s in sides:
-            print "DEBUG: Collapse(): removing s in sides"
+#            print "DEBUG: Collapse(): removing s in sides"
             self.RemoveTriangle(s)
         for f in u.Faces:
             u.Faces[-1].ReplaceVertex(u, v)
@@ -547,8 +580,36 @@ def main():
     _verts = [ [0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1], [1,0,1], [1,1,1], [0,1,1] ]
     _faces = [ [0,1,2], [0,2,3], [0,1,5], [0,5,4], [4,5,6], [4,6,7], [1,2,6], [1,6,5], [0,3,7], [0,7,4], [2,3,7], [2,7,6] ]
     p = ProgMesh(vertCount=len(_verts), faceCount=len(_faces), verts=_verts, faces=_faces)
+
+    print "=========================================="
+    print "ComputeProgressiveMesh()"
+    print "=========================================="    
     p.ComputeProgressiveMesh()
+    # Inspection, Integrity Checks
+    print "INSPECTION:\n  ComputeProgressiveMesh() num verts = %d, num triangles = %d" % ( len(p.vertices), len(p.triangles) )
+##    for f in p.triangles:
+##        v1, v2, v3 = f.vertex
+##        print "  Triangle [%d]: [ %d, %d, %d ] " % ( p.triangles.index(f), v1.ID, v2.ID, v3.ID )
+##        for v in f.vertex:
+##            s = ""
+##            for n in v.Neighbors:
+##                s = s + " " + str(n.ID)
+##            print "    v[%d].Neighbors (#%d): %s " % (f.vertex.index(v), len(n.Neighbors), s)
+
+    print "=========================================="
+    print "DoProgressiveMesh()"
+    print "=========================================="
     print p.DoProgressiveMesh(0.5)
+    # Inspection, Integrity Checks
+    print "INSPECTION:\n  DoProgressiveMesh() num verts = %d, num triangles = %d" % ( len(p.vertices), len(p.triangles) )
+    for f in p.triangles:
+        v1, v2, v3 = f.vertex
+        print "  Triangle [%d]: [ %d, %d, %d ] " % ( p.triangles.index(f), v1.ID, v2.ID, v3.ID )
+        for v in f.vertex:
+            s = ""
+            for n in v.Neighbors:
+                s = s + " " + str(n.ID)
+            print "    v[%d], v.ID[%d].Neighbors (#%d): %s " % (f.vertex.index(v), v.ID, len(v.Neighbors), s)
 
 if __name__ == '__main__':
     main()
