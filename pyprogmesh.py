@@ -358,7 +358,7 @@ class ProgMesh:
         print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
         del self.Verts[:]
         if isinstance(verts[0], DXVertex):
-            for i in range(0, VertCount):
+            for i in range(0, vertCount):
                 self.Verts.append(verts[i])
         else:
             for i in range(0, vertCount):
