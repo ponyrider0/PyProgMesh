@@ -20,7 +20,16 @@ class Triangle:
         self.v3 = _verts[2]
 
 def SortByCost(u, v):
-    return (u.Cost > v.Cost)
+    if u.IsBorder() and not v.IsBorder():
+        return -1
+    if not u.IsBorder() and v.IsBorder():
+        return 1
+    if u.Cost < v.Cost:
+        return -1
+    elif u.Cost == v.Cost:
+        return 0
+    else:
+        return 1
 
 class DXVertex:
 ##    Position = None
@@ -28,10 +37,10 @@ class DXVertex:
 ##    Diffuse = None
 ##    texCoord = None
     def __init__(self, position=None, normal=None, vc=None, uv=None):
-        Position = [0.0, 0.0, 0.0]
-        Normal = [0.0, 0.0, 0.0]
-        Diffuse = [0, 0, 0, 0]
-        texCoord = [0.0, 0.0]
+        self.Position = [0.0, 0.0, 0.0]
+        self.Normal = [0.0, 0.0, 0.0]
+        self.Diffuse = [0, 0, 0, 0]
+        self.texCoord = [0.0, 0.0]
         if position is not None:
             self.Position = position
         if normal is not None:
@@ -76,7 +85,7 @@ class CollapseVertex:
             return True
         return False
     def AddNeighbor(self, v):
-        print "  DEBUG: AddNeighbor() called on v.ID = [%d]:" % (v.ID)
+#        print "  DEBUG: AddNeighbor() called on v.ID = [%d]:" % (v.ID)
         if (not self.IsNeighbor(v)) and (v is not self):
             self.Neighbors.append(v)
             if self.use_cost:
@@ -105,19 +114,19 @@ class CollapseVertex:
                 return True
         return False
     def AddFace(self, f):
-        print "  DEBUG: CollapseVertex.AddFace(f) called by v.ID[%d]:" % (self.ID)
+#        print "  DEBUG: CollapseVertex.AddFace(f) called by v.ID[%d]:" % (self.ID)
         if not self.IsFace(f):
-            print "  DEBUG: f is not in v.ID[%d]'s Faces list (#%d), adding..." % (self.ID, len(self.Faces))
+#            print "  DEBUG: f is not in v.ID[%d]'s Faces list (#%d), adding..." % (self.ID, len(self.Faces))
             self.Faces.append(f)
-            print "  DEBUG: adding f's vertices as neighbors (#%d)..." % (len(f.vertex))
+#            print "  DEBUG: adding f's vertices as neighbors (#%d)..." % (len(f.vertex))
             for v in f.vertex:
                 if v == self:
-                    print "  DEBUG: f.vertex[%d] is this vertex, skipping" % (f.vertex.index(v))
+#                    print "  DEBUG: f.vertex[%d] is this vertex, skipping" % (f.vertex.index(v))
                     continue
-                print "  DEBUG: f.vertex[%d] -- adding as neighbor..." % (f.vertex.index(v))
+#                print "  DEBUG: f.vertex[%d] -- adding as neighbor..." % (f.vertex.index(v))
                 self.AddNeighbor(v)
-        else:
-            print "  DEBUG: f is already in v.ID[%d]'s Faces list (#%d), skipping." % (self.ID, len(self.Faces))
+#        else:
+#            print "  DEBUG: f is already in v.ID[%d]'s Faces list (#%d), skipping." % (self.ID, len(self.Faces))
         return
     def RemoveFace(self, f):
         if self.IsFace(f):
@@ -130,6 +139,10 @@ class CollapseVertex:
         return self.border
     def LockBorder(self):
         self.border = (len(self.Faces) < len(self.Neighbors))
+##        if self.border:
+##            print "  DEBUG: Border Locked(), v.ID[%d]" % (self.ID)
+##        else:
+##            print "  DEBUG: Border UNLocked, v.ID[%d]" % (self.ID)            
         return
     def AddCost(self, c, v):
         self.n_costs[c].append(v)
@@ -198,7 +211,7 @@ class CollapseVertex:
                     dotproduct = vecDotProduct(f.normal, s.normal)
                     mincurv = min([mincurv, (1.002 - dotproduct)/2.0])
                 curvature = max([curvature, mincurv])
-        if self.IsBorder:
+        if self.IsBorder():
             WEIGHT_BORDER = 100
             curvature = curvature * WEIGHT_BORDER
         if self.parent.Arguments.protecttexture:
@@ -206,6 +219,7 @@ class CollapseVertex:
                 curvature = 1
         if self.parent.Arguments.lockborder and self.IsBorder():
             curvature = 999999.9
+#        print "DEBUG: ComputeCost() self.ID[%d], v.ID[%d], c=%f" % (self.ID, v.ID, edgelength*curvature)
         return edgelength * curvature
     def ComputeNormal(self):
         if len(self.Faces) == 0:
@@ -231,20 +245,20 @@ class CollapseTriangle:
 #        self.vertex.append(v1)
 #        self.vertex.append(v2)
 #        self.vertex.append(v3)
-        print "================================="
-        print "================================="
-        print "DEBUG: CollapseTriangle creation: [%d, %d, %d]" % (v1.ID, v2.ID, v3.ID)
-        print "================================="
-        print "================================="
+##        print "================================="
+##        print "================================="
+##        print "DEBUG: CollapseTriangle creation: [%d, %d, %d]" % (v1.ID, v2.ID, v3.ID)
+##        print "================================="
+##        print "================================="
         for v_self in self.vertex:
-            print "v[%d], v.ID=[%d]: AddFace()..." % (self.vertex.index(v_self), v_self.ID)
+#            print "v[%d], v.ID=[%d]: AddFace()..." % (self.vertex.index(v_self), v_self.ID)
             v_self.AddFace(self)
-        print "DEBUG: CollapseTriangle.ComputeNormal()"
+#        print "DEBUG: CollapseTriangle.ComputeNormal()"
         self.ComputeNormal()
-        print "================================="
-        print " END: CollapseTriangle creation."
-        print "================================="
-        return
+##        print "================================="
+##        print " END: CollapseTriangle creation."
+##        print "================================="
+##        return
     def HasVertex(self, vert):
         if vert in self.vertex:
             return self.vertex.index(vert)
@@ -285,13 +299,14 @@ class CollapseTriangle:
 
 
 class PMarg:
-    useedgelength = False
-    usecurvature = False
-    protecttexture = False
-    protectvc = False
-    lockborder = False
-    keepborder = False
-    removeduplicate = True
+    def __init__(self):
+        self.useedgelength = True
+        self.usecurvature = True
+        self.protecttexture = False
+        self.protectvc = False
+        self.lockborder = False
+        self.keepborder = False
+        self.removeduplicate = True
 
 ##########################################################
 #
@@ -391,11 +406,12 @@ class ProgMesh:
         return
     def ComputeAllEdgeCollapseCosts(self):
         t1 = time.time()
-        print "DEBUG: ComputeAllEdgeCollapseCosts():"
+#        print "DEBUG: ComputeAllEdgeCollapseCosts():"
         for vert in self.vertices:
             self.ComputeEdgeCostAtVertex(vert)
+#            print "DEBUG: v[%d] Cost=%f" % (self.vertices.index(vert), vert.Cost)
         self.vertices.sort(SortByCost)
-        print "PROFILING: completed in %f sec" % (time.time()-t1)
+#        print "PROFILING: completed in %f sec" % (time.time()-t1)
         return
     def Collapse(self, u, v, recompute=True):
         if v is None:
@@ -408,8 +424,8 @@ class ProgMesh:
             if f.HasVertex(v):
 #                print "DEBUG: Collapse(): adding f to sides"
                 sides.append(f)
+#        print "DEBUG: Collapse(): removing triangles (#%d)" % (len(sides))
         for s in sides:
-#            print "DEBUG: Collapse(): removing s in sides"
             self.RemoveTriangle(s)
         for f in u.Faces:
             u.Faces[-1].ReplaceVertex(u, v)
@@ -427,21 +443,21 @@ class ProgMesh:
             if self.Arguments.removeduplicate:
                 v = self.CheckDuplicate(v)
             self.vertices.append(v)
-        print "PROFILING: Generated self.vertices, completed in %f sec" % (time.time()-t2)
-        # integrity check
-        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
-        for vert in self.vertices:
-            if vert.ID > len(self.vertices):
-                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
+#        print "PROFILING: Generated self.vertices, completed in %f sec" % (time.time()-t2)
+##        # integrity check
+##        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
+##        for vert in self.vertices:
+##            if vert.ID > len(self.vertices):
+##                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
         del self.triangles[:]
         t2 = time.time()
-        print "DEBUG: Generating self.triangles (CollapseTriangle data), TriangleCount=%d" % (self.TriangleCount)
+#        print "DEBUG: Generating self.triangles (CollapseTriangle data), TriangleCount=%d" % (self.TriangleCount)
         for i in range(0, self.TriangleCount):
             t = CollapseTriangle(self.vertices[self.Faces[i].v1], self.vertices[self.Faces[i].v2], self.vertices[self.Faces[i].v3])
             self.triangles.append(t)
-        print "PROFILING: Generated self.triangles, completed in %f sec" % (time.time()-t2)
+#        print "PROFILING: Generated self.triangles, completed in %f sec" % (time.time()-t2)
         t2 = time.time()
-        print "DEBUG: Re-index self.vertices... #=%d" % (len(self.vertices))
+#        print "DEBUG: Re-index self.vertices... #=%d" % (len(self.vertices))
         i = 0
         j = 0
         while i < len(self.vertices):
@@ -456,13 +472,13 @@ class ProgMesh:
                 i = i-1
             i = i+1
             j = j+1
-        print "PROFILING: Re-index self.vertices, completed in %f sec" % (time.time()-t2)
-        # integrity check
-        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
-        for vert in self.vertices:
-            if vert.ID > len(self.vertices):
-                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
-        print "DEBUG: vert.ID (max) = %d" % (i-1)
+#        print "PROFILING: Re-index self.vertices, completed in %f sec" % (time.time()-t2)
+##        # integrity check
+##        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
+##        for vert in self.vertices:
+##            if vert.ID > len(self.vertices):
+##                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
+#        print "DEBUG: vert.ID (max) = %d" % (i-1)
         self.ComputeAllEdgeCollapseCosts()
 #        self.CollapseOrder.clear()
         del self.CollapseOrder[:]
@@ -474,9 +490,9 @@ class ProgMesh:
         while len(self.vertices) is not 0:
             mn = self.vertices[len(self.vertices)-1]
             cv = mn.Candidate
-            # integrity check
-            if mn.ID > len(self.vertices):
-                print "ERROR FOUND: mn.ID = %d at index=%d, self.vertices #=%d" % (mn.ID, self.vertices.index(mn), len(self.vertices))
+##            # integrity check
+##            if mn.ID > len(self.vertices):
+##                print "ERROR FOUND: mn.ID = %d at index=%d, self.vertices #=%d" % (mn.ID, self.vertices.index(mn), len(self.vertices))
 #            print "DEBUG: ComputeProgressiveMesh(): mn.ID = %d, i = %d" % (mn.ID, len(self.vertices)-1)
             self.CollapseOrder[len(self.vertices)-1] = mn.ID
             if cv is not None:
@@ -484,14 +500,18 @@ class ProgMesh:
             else:
                 self.CollapseMap[mn.ID] = -1
             self.Collapse(mn, cv)
-        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
+        s = ''
+        for co in self.CollapseOrder:
+            s = s + " " + str(co)
+        print "CollapseOrder (#%d): %s" % (len(self.CollapseOrder), s)
+#        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
         t2 = time.time()
         print "PROFILING: ComputeProgressiveMesh(): completed in %f sec" % (t2-t1)
         return
     def DoProgressiveMesh(self, ratio):
         t1 = time.time()
-        print "DEBUG: DoProgressiveMesh(): ratio=%f" % (ratio)
         target = self.VertexCount * ratio
+        print "DEBUG: DoProgressiveMesh(): ratio=%f, target=%f" % (ratio, target)
         CollapseList = list()
         new_Faces = list()
         new_Verts = list()
@@ -519,7 +539,7 @@ class ProgMesh:
                 i = i-1
             i = i+1
             j = j+1
-        print "DEBUG: DoProgressiveMesh() vert.ID (max) i = %d" % (i-1)
+#        print "DEBUG: DoProgressiveMesh() vert.ID (max) i = %d" % (i-1)
         for i in range(0, len(self.vertices)):
             mn = self.vertices[i]
 #            print "DEBUG: mn.ID = %d, from self.vertices[%d]" % (mn.ID, i)
@@ -531,13 +551,24 @@ class ProgMesh:
 #            print "DEBUG: DoProgressiveMesh(): self.vertices #=%d, self.CollapseOrder #=%d, i=%d" % (len(self.vertices), len(self.CollapseOrder), i)
 #            print "DEBUG: DoProgressiveMesh(): self.CollapseOrder[%d] #=%d" % (i, self.CollapseOrder[i])
             CollapseList.append(self.vertices[ self.CollapseOrder[i] ])
+        s = ""
+        for co in CollapseList:
+            s = s + " " + str( co.ID )              
+        print "DEBUG: CollapseList (#%d): %s" % (len(CollapseList), s)
         while len(CollapseList) > target:
             mn = CollapseList[-1]
-            if mn.IsBorder:
+            if mn.IsBorder():
+                print "  Stopping: v.ID[%d] is border." % (mn.ID)
+#                CollapseList.pop()
+#                continue
                 break
             if mn.Cost > 999999.0:
+                print "  Stopping: v.ID[%d] cost > 999999.0" % (mn.ID)
+#                CollapseList.pop()
+#                continue
                 break
-            Collapse(mn, mn.Candidate, false)
+#            print "  Collapsing v.ID[%d] to v.ID[%d]..." % (mn.ID, mn.Candidate.ID)
+            self.Collapse(mn, mn.Candidate, False)
             CollapseList.pop()
         i = 0
         for v in self.vertices:
@@ -579,6 +610,9 @@ def main():
     # cube: 6 points, 6 quads, 12 triangles
     _verts = [ [0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1], [1,0,1], [1,1,1], [0,1,1] ]
     _faces = [ [0,1,2], [0,2,3], [0,1,5], [0,5,4], [4,5,6], [4,6,7], [1,2,6], [1,6,5], [0,3,7], [0,7,4], [2,3,7], [2,7,6] ]
+
+    
+    
     p = ProgMesh(vertCount=len(_verts), faceCount=len(_faces), verts=_verts, faces=_faces)
 
     print "=========================================="
@@ -599,9 +633,9 @@ def main():
     print "=========================================="
     print "DoProgressiveMesh()"
     print "=========================================="
-    print p.DoProgressiveMesh(0.5)
+    numVerts, verts, numFaces, faces = p.DoProgressiveMesh(0.7)
     # Inspection, Integrity Checks
-    print "INSPECTION:\n  DoProgressiveMesh() num verts = %d, num triangles = %d" % ( len(p.vertices), len(p.triangles) )
+    print "INSPECTION:\n  DoProgressiveMesh() p.vertices = %d, p.triangles = %d" % ( len(p.vertices), len(p.triangles) )
     for f in p.triangles:
         v1, v2, v3 = f.vertex
         print "  Triangle [%d]: [ %d, %d, %d ] " % ( p.triangles.index(f), v1.ID, v2.ID, v3.ID )
@@ -610,6 +644,17 @@ def main():
             for n in v.Neighbors:
                 s = s + " " + str(n.ID)
             print "    v[%d], v.ID[%d].Neighbors (#%d): %s " % (f.vertex.index(v), v.ID, len(v.Neighbors), s)
+    print "RESULTS: vertices = %d, faces = %d " % (numVerts, numFaces)
+    s = ""
+    for v1 in verts:
+        v = v1.Position
+        s = s + "[" + str(v[0]) + ", " + str(v[1]) + ", " + str(v[2]) + "] "
+    print "verts: %s" % (s)
+    s = ""
+    for f in faces:
+        s = s + "[" + str(f[0]) + " " + str(f[1]) + " " + str(f[2]) + "] "
+    print "faces: %s" % (s)
+
 
 if __name__ == '__main__':
     main()
