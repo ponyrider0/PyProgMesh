@@ -98,6 +98,12 @@ class CollapseVertex:
         self.Faces = list()
         self.n_costs = defaultdict(list)
         return
+    def __del__(self):
+        if len(self.Faces) != 0:
+            print "ERROR: vertex[ID=%d] deleted without removal of all faces." % (self.ID)
+        for n in self.Neighbors:
+            n.RemoveNeighbor(self)
+            self.Neighbors.remove(n)
     def IsNeighbor(self, v):
         if v in self.Neighbors:
             return True
@@ -175,7 +181,8 @@ class CollapseVertex:
                 verts.remove(v)
                 if (len(verts) == 0):
                     del self.n_costs[c]
-                break
+#                break
+                continue
         if self.Candidate == v:
             if len(self.n_costs) == 0:
                 self.Cost = -1.0
@@ -262,7 +269,6 @@ class CollapseTriangle:
 ##    normal = None
 ##    deleted = None
     def __init__(self, v1, v2, v3):
-        self.deleted = False
         self.normal = [0.0, 0.0, 0.0]
 #        del self.vertex[:]
         self.vertex = [v1, v2, v3]
@@ -283,6 +289,11 @@ class CollapseTriangle:
 ##        print " END: CollapseTriangle creation."
 ##        print "================================="
 ##        return
+    def __del__(self):
+        for v in self.vertex:
+            if v is None:
+                continue
+            v.RemoveFace(self)
     def HasVertex(self, vert):
         if vert in self.vertex:
             return self.vertex.index(vert)+1
@@ -390,7 +401,6 @@ class ProgMesh:
         if self.HasTriangle(t):
 #            print "  DEBUG: RemoveTriangle(): [%d %d %d]" % (t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
             self.triangles.remove(t)
-            t.deleted = True
             del t
         return
     def GetRawTriangle(self, index):
@@ -443,6 +453,7 @@ class ProgMesh:
 #            print "DEBUG: Collapse(): u.Faces #=%d, v is None" % (len(u.Faces))
             self.RemoveVertex(u)
             return
+        
 #        print "DEBUG: Collapse(): u.Faces #=%d, v is not None" % (len(u.Faces))
         sides = list()
 #        print "  INSPECTING u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
@@ -454,7 +465,7 @@ class ProgMesh:
 
 #        print "  DEBUG: Collapse(): removing triangles (#%d)" % (len(sides))
         for s in sides:
-            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, s.vertex[0].ID, s.vertex[1].ID, s.vertex[2].ID)
+#            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, s.vertex[0].ID, s.vertex[1].ID, s.vertex[2].ID)
             self.RemoveTriangle(s)
 
 #        print "  DEBUG: Replacing Vertices in all u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
@@ -522,7 +533,7 @@ class ProgMesh:
             self.CollapseOrder.append(0)
         self.CollapseMap.clear()
         while len(self.vertices) is not 0:
-            mn = self.vertices[len(self.vertices)-1]
+            mn = self.vertices[-1]
             cv = mn.Candidate
 ##            # integrity check
 ##            if mn.ID > len(self.vertices):
@@ -606,7 +617,7 @@ class ProgMesh:
 #                CollapseList.pop()
 #                continue
                 break
-            print "  Collapsing v.ID[%d] to v.ID[%d]..." % (mn.ID, mn.Candidate.ID)
+            print "  Collapsing vertices: ID:%d to %d..." % (mn.ID, mn.Candidate.ID)
             CollapseCount = CollapseCount+1
             self.Collapse(mn, mn.Candidate, False)
             CollapseList.pop()
@@ -629,8 +640,6 @@ class ProgMesh:
             new_Verts.append(v.Vert)
             i = i+1
         for t in self.triangles:
-            if t.deleted:
-                continue
             face = list()
             # Integrity Check
             found_error = False
