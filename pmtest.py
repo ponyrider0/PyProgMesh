@@ -11,19 +11,21 @@ def PMBlock(block):
     verts = list()
     faces = list()
     PMSettings = pyprogmesh.ProgMeshSettings()
-    if block.has_uv:
+    if block.num_uv_sets > 0:
         PMSettings.ProtectTexture = True
     if block.has_vertex_colors:
         PMSettings.ProtectColor = True
 ##    if block.num_vertices > block.num_triangles:
 ###        raw_input("Border condition decteted.  Enabling option. Press ENTER to continue...")
 ##        PMSettings.KeepBorder = True
+    PMSettings.RemoveDuplicate = True
+    PMSettings.KeepBorder = False
 
     for i in range(0, len(block.vertices)):
         _v = block.vertices[i]
 #        print "vertex: (%f, %f, %f)" % (_v.x, _v.y, _v.z)
         v = [_v.x, _v.y, _v.z]
-        if block.has_uv:
+        if block.num_uv_sets > 0:
             _uv = [block.uv_sets[0][i].u, block.uv_sets[0][i].v]
         else:
             _uv = None
@@ -46,7 +48,7 @@ def PMBlock(block):
 #    raw_input("Press ENTER to compute progressive mesh.")
     pm.ComputeProgressiveMesh()
 #    raw_input("Press ENTER to perform decimation.")    
-    result = pm.DoProgressiveMesh(0.5)
+    result = pm.DoProgressiveMesh(0.25)
     if result == 0:
         return
     else:
@@ -54,7 +56,7 @@ def PMBlock(block):
         print "RESULTS: new verts = %d, new faces = %d" % (numVerts, numFaces)
         block.num_vertices = numVerts
         block.vertices.update_size()
-        if block.has_uv or block.num_uv_sets > 0:
+        if block.num_uv_sets > 0:
             block.uv_sets.update_size()
         if block.has_normals:
             block.normals.update_size()
@@ -66,7 +68,7 @@ def PMBlock(block):
             v.x = rawVert.Position[0]
             v.y = rawVert.Position[1]
             v.z = rawVert.Position[2]
-            if block.has_uv:
+            if block.num_uv_sets > 0:
                 uv = block.uv_sets[0][i]
                 uv.u = rawVert.UV[0]
                 uv.v = rawVert.UV[1]
