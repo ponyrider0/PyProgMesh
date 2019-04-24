@@ -31,19 +31,19 @@ class RawTriangle:
 class RawVertex:
 ##    Position = None
 ##    Normal = None
-##    RBGA = None
+##    RGBA = None
 ##    UV = None
-    def __init__(self, Position=None, Normal=None, RBGA=None, UV=None):
+    def __init__(self, Position=None, Normal=None, RGBA=None, UV=None):
         self.Position = [0.0, 0.0, 0.0]
         self.Normal = [0.0, 0.0, 0.0]
-        self.RBGA = [0, 0, 0, 0]
+        self.RGBA = [0, 0, 0, 0]
         self.UV = [0.0, 0.0]
         if Position is not None:
             self.Position = Position
         if Normal is not None:
             self.Normal = Normal
-        if RBGA is not None:
-            self.RBGA = RBGA
+        if RGBA is not None:
+            self.RGBA = RGBA
         if UV is not None:
             self.UV = UV
 
@@ -60,13 +60,13 @@ def SortByBorderAndCost(u, v):
         return 1
 
 def SortByCost(u, v):
-    if u.Cost < v.Cost:
+    print "DEBUG: SortByCost()"
+    if u.Cost > v.Cost:
         return -1
     elif u.Cost == v.Cost:
         return 0
     else:
         return 1
-
 
 ##########################################################
 #
@@ -98,9 +98,14 @@ class CollapseVertex:
         self.Faces = list()
         self.n_costs = defaultdict(list)
         return
-    def __del__(self):
+    def RemoveSelf(self):
+#        print "DEBUG: deleting CollapseVertex v.ID[%d]" % (self.ID)
         if len(self.Faces) != 0:
-            print "ERROR: vertex[ID=%d] deleted without removal of all faces." % (self.ID)
+            s = ""
+            for f in self.Faces:
+                s = s + ("f[%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)) + " "
+            print "ASSERTION FAILURE: vertex[ID=%d] deleted without removal of all faces (#%d): %s" % (self.ID, len(self.Faces), s)
+            raw_input("PRESS ENTER TO CONTINUE.\n")
         for n in self.Neighbors:
             n.RemoveNeighbor(self)
             self.Neighbors.remove(n)
@@ -153,16 +158,33 @@ class CollapseVertex:
 #            print "  DEBUG: f is already in v.ID[%d]'s Faces list (#%d), skipping." % (self.ID, len(self.Faces))
         return
     def RemoveFace(self, f):
+        if f.HasVertex(self) == False:
+            print "ASSERTION FAILURE: v[%d].RemoveFace() face [%d %d %d] does not contain this vertex" % (self.ID, f.vertex[0], f.vertex[1], f.vertex[2])
+            raw_input("PRESS ENTER TO CONTINUE.\n")
         if self.IsFace(f):
             self.Faces.remove(f)
             for v in f.vertex:
                 if v == self:
-                    self.RemoveIfNotNeighbor(v)
+                    continue
+                self.RemoveIfNotNeighbor(v)
         return
     def IsBorder(self):
         return self.border
     def LockBorder(self):
-        self.border = (len(self.Faces) < len(self.Neighbors))
+        # for each neighbor, see if neighbor shares more than one face with self
+        self.border = False
+        for n in self.Neighbors:
+            num_shared_faces = 0
+            for f in n.Faces:
+                if f in self.Faces:
+                    num_shared_faces = num_shared_faces + 1
+                    if num_shared_faces > 1:
+                        break
+            if num_shared_faces == 1:
+                self.border = True
+                break
+#        # original algorithm
+#        self.border = (len(self.Faces) < len(self.Neighbors))
 ##        if self.border:
 ##            print "  DEBUG: Border Locked(), v.ID[%d]" % (self.ID)
 ##        else:
@@ -243,9 +265,11 @@ class CollapseVertex:
             if not self.IsSameUV(v):
                 curvature = 1
         if self.parent.Settings.KeepBorder and self.IsBorder():
+#            raw_input("KEEP BORDER activated, Press ENTER to Continue.")
             curvature = 999999.9
-#        print "DEBUG: ComputeCost() self.ID[%d], v.ID[%d], c=%f" % (self.ID, v.ID, edgelength*curvature)
-        return edgelength * curvature
+        cost = edgelength * curvature
+#        print "DEBUG: ComputeCost() v[%d] to v[%d], c=%f" % (self.ID, v.ID, cost)
+        return cost
     def ComputeNormal(self):
         if len(self.Faces) == 0:
             return
@@ -289,7 +313,8 @@ class CollapseTriangle:
 ##        print " END: CollapseTriangle creation."
 ##        print "================================="
 ##        return
-    def __del__(self):
+    def RemoveSelf(self):
+#        print "DEBUG: deleting CollapseTriangle [%d %d %d]" % (self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
         for v in self.vertex:
             if v is None:
                 continue
@@ -299,10 +324,9 @@ class CollapseTriangle:
             return self.vertex.index(vert)+1
         else:
             return False
-    def ReplaceVertex(self, u, v, removeface=True):
+    def ReplaceVertex(self, u, v):
 #        print "  DEBUG: ReplaceVertex(%d with %d) for Triangle [%d %d %d]" % (u.ID, v.ID, self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
-        if removeface:
-            u.RemoveFace(self)
+        u.RemoveFace(self)
 #        print "    INSPECTION: Triangle currently [%d %d %d]" % (self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
         self.vertex[self.HasVertex(u)-1] = v
 #        print "    INSPECTION: Triangle now [%d %d %d]" % (self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
@@ -310,6 +334,9 @@ class CollapseTriangle:
         for v_self in self.vertex:
             if v_self == v:
                 continue
+            if v_self.IsNeighbor(u) == False:
+                print "ASSERTION FAILURE: ReplaceVertex(%d to %d): v_self.ID[%d] is not Neighbor to u.ID[%d]" % (u.ID, v.ID, v_self.ID, u.ID)
+                raw_input("PRESS ENTER TO CONTINUE.\n")
             v_self.RemoveIfNotNeighbor(u)
             v_self.AddNeighbor(v)
         self.ComputeNormal()
@@ -391,6 +418,7 @@ class ProgMesh:
         if self.HasVertex(v):
 #            print "  DEBUG: RemoveVertex(): ID=%d" % (v.ID)
             self.vertices.remove(v)
+            v.RemoveSelf()
             del v
         return
     def HasTriangle(self, t):
@@ -401,6 +429,7 @@ class ProgMesh:
         if self.HasTriangle(t):
 #            print "  DEBUG: RemoveTriangle(): [%d %d %d]" % (t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
             self.triangles.remove(t)
+            t.RemoveSelf()
             del t
         return
     def GetRawTriangle(self, index):
@@ -418,7 +447,7 @@ class ProgMesh:
                     continue
                 if self.Settings.ProtectTexture and not u.IsSameUV(v):
                     continue
-                if (self.Settings.ProtectColor and u.Vert.RBGA == v.Vert.RBGA):
+                if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
                     continue
                 del v
                 u.Duplicate = u.Duplicate+1
@@ -440,12 +469,12 @@ class ProgMesh:
         return
     def ComputeAllEdgeCollapseCosts(self):
         t1 = time.time()
-#        print "DEBUG: ComputeAllEdgeCollapseCosts():"
+        print "DEBUG: ComputeAllEdgeCollapseCosts():"
         for vert in self.vertices:
             self.ComputeEdgeCostAtVertex(vert)
-#            print "DEBUG: v[%d] Cost=%f" % (self.vertices.index(vert), vert.Cost)
-#        self.vertices.sort(SortByBorderAndCost)
-        self.vertices.sort(SortByCost)        
+#            print "DEBUG: v[%d], Candidate=[%d], Cost=%f" % (vert.ID, vert.Candidate.ID, vert.Cost)
+        self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
+#        self.vertices.sort(cmp=SortByCost)        
 #        print "PROFILING: completed in %f sec" % (time.time()-t1)
         return
     def Collapse(self, u, v, recompute=True):
@@ -453,29 +482,54 @@ class ProgMesh:
 #            print "DEBUG: Collapse(): u.Faces #=%d, v is None" % (len(u.Faces))
             self.RemoveVertex(u)
             return
+
+        # INTEGRITY CHECK
+        num_Faces = len(u.Faces)
         
-#        print "DEBUG: Collapse(): u.Faces #=%d, v is not None" % (len(u.Faces))
-        sides = list()
+#        print "DEBUG: Collapse(): u[ID=%d] to v[ID=%d]" % (u.ID, v.ID)
+        delete_list = list()
+        replace_list = list()
 #        print "  INSPECTING u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
         for f in u.Faces:
 #            print "  INSPECTING u[ID=%d].face [%d %d %d]..." % (u.ID, f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
             if f.HasVertex(v):
 #                print "    u.face contains v[ID=%d]" % (v.ID)
-                sides.append(f)
+                delete_list.append(f)
+            else:
+                replace_list.append(f)
 
-#        print "  DEBUG: Collapse(): removing triangles (#%d)" % (len(sides))
-        for s in sides:
-#            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, s.vertex[0].ID, s.vertex[1].ID, s.vertex[2].ID)
-            self.RemoveTriangle(s)
+        removed_Faces = 0
+#        print "  DEBUG: Collapse(): removing triangles (#%d)" % (len(delete_list))
+        for f in delete_list:
+#            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
+            self.RemoveTriangle(f)
+            removed_Faces = removed_Faces + 1
+
+        # INTEGRITY CHECK
+        remaining_Faces = len(u.Faces)
+#        print "Original Num Faces = %d, Removed Faces = %d, Remaining Faces = %d" % (num_Faces, removed_Faces, remaining_Faces)
+#        s = ""
+#        for f in u.Faces:
+#            s = s + ("f[%d][%d %d %d]  " % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID))
+#        print "INSPECTION: u.Face: %s" % (s)
 
 #        print "  DEBUG: Replacing Vertices in all u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
-        for f in u.Faces:
-#            print "  DEBUG: f[%d] replacing vertices" % (u.Faces.index(f))
-            f.ReplaceVertex(u, v, False)
+
+        for f in replace_list:
+#            print "  DEBUG: f[%d][%d %d %d] replacing vertex u[%d] with v[%d]" % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID, u.ID, v.ID)
+            f.ReplaceVertex(u, v)
+#            print "  DEBUG: replacement completed."
+
+        # INTEGRITY CHECK
+#        print "  DEBUG: last f is [%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
+#        s = ""
+#        for f in u.Faces:
+#            s = s + ("f[%d][%d %d %d]  " % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID))
+#        print "INSPECTION: u.Faces (#%d): %s" % (len(u.Faces), s)
 
         self.RemoveVertex(u)
-#        self.vertices.sort(SortByBorderAndCost)
-        self.vertices.sort(SortByCost)
+        self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
+#        self.vertices.sort(cmp=SortByCost)
 #        print "============ COLLAPSE() completed. ====================="
         return
     def ComputeProgressiveMesh(self):
@@ -511,7 +565,7 @@ class ProgMesh:
             vert.ID = i
             vert.LockBorder()
             vert.use_cost = True
-            if vert.Duplicate:
+            if vert.Duplicate > 0:
                 vert.Duplicate = vert.Duplicate-1
                 del self.vertices[i]
                 i = i-1
@@ -530,7 +584,11 @@ class ProgMesh:
         t2 = time.time()
         print "DEBUG: Generating self.CollapseOrder"
         for i in range(0, len(self.vertices)):
-            self.CollapseOrder.append(0)
+            self.CollapseOrder.append([0,0])
+        costMap = list()
+        for i in range(0, len(self.vertices)):
+            v = self.vertices[i]
+            costMap.append(v.Cost)
         self.CollapseMap.clear()
         while len(self.vertices) is not 0:
             mn = self.vertices[-1]
@@ -539,7 +597,7 @@ class ProgMesh:
 ##            if mn.ID > len(self.vertices):
 ##                print "ERROR FOUND: mn.ID = %d at index=%d, self.vertices #=%d" % (mn.ID, self.vertices.index(mn), len(self.vertices))
 #            print "DEBUG: ComputeProgressiveMesh(): mn.ID = %d, i = %d" % (mn.ID, len(self.vertices)-1)
-            self.CollapseOrder[len(self.vertices)-1] = mn.ID
+            self.CollapseOrder[len(self.vertices)-1] = [mn.ID, costMap[len(self.vertices)-1] ]
             if cv is not None:
                 self.CollapseMap[mn.ID] = cv.ID
             else:
@@ -547,7 +605,7 @@ class ProgMesh:
             self.Collapse(mn, cv)
 ##        s = ''
 ##        for co in self.CollapseOrder:
-##            s = s + " " + str(co)
+##            s = s + ("v[%d](c=%f) " % (co[0], co[1]))
 ##        print "CollapseOrder (#%d): %s" % (len(self.CollapseOrder), s)
 #        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
         t2 = time.time()
@@ -577,7 +635,7 @@ class ProgMesh:
             vert = self.vertices[i]
 #            print "DEBUG: DoProgressiveMesh(): vert.ID = %d, i = %d " % (i, j)
             vert.ID = i
-            vert.LockBorder()
+#            vert.LockBorder()
             if vert.Duplicate:
                 vert.Duplicate = vert.Duplicate-1
                 del self.vertices[i]
@@ -595,7 +653,8 @@ class ProgMesh:
             mn.Candidate = cv
 #            print "DEBUG: DoProgressiveMesh(): self.vertices #=%d, self.CollapseOrder #=%d, i=%d" % (len(self.vertices), len(self.CollapseOrder), i)
 #            print "DEBUG: DoProgressiveMesh(): self.CollapseOrder[%d] #=%d" % (i, self.CollapseOrder[i])
-            CollapseList.append(self.vertices[ self.CollapseOrder[i] ])
+            CollapseList.append(self.vertices[ self.CollapseOrder[i][0] ])
+            self.vertices[ self.CollapseOrder[i][0] ].Cost = self.CollapseOrder[i][1]
 ##        s = ""
 ##        for co in CollapseList:
 ##            s = s + " " + str( co.ID )              
@@ -604,8 +663,8 @@ class ProgMesh:
         while len(CollapseList) > target:
             mn = CollapseList[-1]
 ##            if self.Settings.KeepBorder and mn.IsBorder():
-####                print "  Stopping: v.ID[%d] is border." % (mn.ID)
-####                break
+##                print "  Stopping: v.ID[%d] is border." % (mn.ID)
+##                break
 ##                print "  Skipping: v.ID[%d] is border." % (mn.ID)
 ##                # decrease target by 1 to account for skipped vert
 ##                if target > 1:
@@ -614,10 +673,8 @@ class ProgMesh:
 ##                continue
             if mn.Cost > 999999.0:
                 print "  Stopping: v.ID[%d] cost > 999999.0" % (mn.ID)
-#                CollapseList.pop()
-#                continue
                 break
-            print "  Collapsing vertices: ID:%d to %d..." % (mn.ID, mn.Candidate.ID)
+#            print "  Collapsing vertices: ID: %d to %d, cost=%f..." % (mn.ID, mn.Candidate.ID, mn.Cost)
             CollapseCount = CollapseCount+1
             self.Collapse(mn, mn.Candidate, False)
             CollapseList.pop()
