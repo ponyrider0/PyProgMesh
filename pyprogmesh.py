@@ -393,7 +393,7 @@ class ProgMesh:
         t = time.time()
         self.RawVertexCount = vertCount
         self.RawTriangleCount = faceCount
-        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
+#        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
         del self.RawVerts[:]
         if isinstance(verts[0], RawVertex):
             for i in range(0, vertCount):
@@ -469,7 +469,7 @@ class ProgMesh:
         return
     def ComputeAllEdgeCollapseCosts(self):
         t1 = time.time()
-        print "DEBUG: ComputeAllEdgeCollapseCosts():"
+#        print "DEBUG: ComputeAllEdgeCollapseCosts(): ..."
         for vert in self.vertices:
             self.ComputeEdgeCostAtVertex(vert)
 #            print "DEBUG: v[%d], Candidate=[%d], Cost=%f" % (vert.ID, vert.Candidate.ID, vert.Cost)
@@ -536,7 +536,7 @@ class ProgMesh:
         t1 = time.time()
         del self.vertices[:]
         t2 = time.time()
-        print "DEBUG: ComputeProgressiveMesh(): Generating self.vertices (CollapseVertex data), RawVertexCount=%d" % (self.RawVertexCount)
+#        print "DEBUG: ComputeProgressiveMesh(): RawVertexCount=%d" % (self.RawVertexCount)
         for i in range(0, self.RawVertexCount):
             v = CollapseVertex(self, i)
             if self.Settings.RemoveDuplicate:
@@ -582,7 +582,7 @@ class ProgMesh:
 #        self.CollapseOrder.clear()
         del self.CollapseOrder[:]
         t2 = time.time()
-        print "DEBUG: Generating self.CollapseOrder"
+#        print "DEBUG: Generating self.CollapseOrder ..."
         for i in range(0, len(self.vertices)):
             self.CollapseOrder.append([0,0])
         costMap = list()
@@ -614,7 +614,7 @@ class ProgMesh:
     def DoProgressiveMesh(self, ratio):
         t1 = time.time()
         target = self.RawVertexCount * ratio
-        print "DEBUG: DoProgressiveMesh(): ratio=%f, target=%f" % (ratio, target)
+#        print "DEBUG: DoProgressiveMesh(): ratio=%f, target=%f" % (ratio, target)
         CollapseList = list()
         new_Faces = list()
         new_Verts = list()
@@ -712,7 +712,7 @@ class ProgMesh:
         result = len(new_Verts)
 
         t2 = time.time()
-#        print "PROFILING: DoProgressiveMesh(): completed in %f sec" % (t2-t1)
+        print "PROFILING: DoProgressiveMesh(): completed in %f sec" % (t2-t1)
         if result == 0:
             print "No new_Verts"
             return 0
