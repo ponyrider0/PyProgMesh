@@ -17,8 +17,7 @@ def PMBlock(block):
         PMSettings.ProtectColor = True
 ##    if block.num_vertices > block.num_triangles:
 ###        raw_input("Border condition decteted.  Enabling option. Press ENTER to continue...")
-##        PMargs.keepborder = True
-    PMSettings.KeepBorder = True
+##        PMSettings.KeepBorder = True
 
     for i in range(0, len(block.vertices)):
         _v = block.vertices[i]
@@ -33,10 +32,10 @@ def PMBlock(block):
         else:
             _normal = None
         if block.has_vertex_colors:
-            _vc = [block.vertex_colors[i].r, block.vertex_colors[i].b, block.vertex_colors[i].g, block.vertex_colors[i].a]
+            _vc = [block.vertex_colors[i].r, block.vertex_colors[i].g, block.vertex_colors[i].b, block.vertex_colors[i].a]
         else:
             _vc = None
-        verts.append(pyprogmesh.RawVertex(Position=v, UV=_uv, Normal=_normal, RBGA=_vc))
+        verts.append(pyprogmesh.RawVertex(Position=v, UV=_uv, Normal=_normal, RGBA=_vc))
     for i in range(0, len(block.triangles)):
         _t = block.triangles[i]
 #        print "triangle: [%d, %d, %d]" % (_t.v_1, _t.v_2, _t.v_3)
@@ -47,7 +46,7 @@ def PMBlock(block):
 #    raw_input("Press ENTER to compute progressive mesh.")
     pm.ComputeProgressiveMesh()
 #    raw_input("Press ENTER to perform decimation.")    
-    result = pm.DoProgressiveMesh(0.75)
+    result = pm.DoProgressiveMesh(0.5)
     if result == 0:
         return
     else:
@@ -78,10 +77,10 @@ def PMBlock(block):
                 normals.z = rawVert.Normal[2]
             if block.has_vertex_colors:
                 vc = block.vertex_colors[i]
-                vc.r = rawVert.RBGA[0]
-                vc.b = rawVert.RBGA[1]
-                vc.g = rawVert.RBGA[2]
-                vc.a = rawVert.RBGA[3]
+                vc.r = rawVert.RGBA[0]
+                vc.g = rawVert.RGBA[1]
+                vc.b = rawVert.RGBA[2]
+                vc.a = rawVert.RGBA[3]
         block.num_triangles = numFaces
         block.triangles.update_size()
         for i in range(0, numFaces):
