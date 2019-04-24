@@ -263,7 +263,8 @@ class CollapseVertex:
             curvature = curvature * WEIGHT_BORDER
         if self.parent.Settings.ProtectTexture:
             if not self.IsSameUV(v):
-                curvature = 1
+                WEIGHT_UV = 1.5
+                curvature = curvature * WEIGHT_UV
         if self.parent.Settings.KeepBorder and self.IsBorder():
 #            raw_input("KEEP BORDER activated, Press ENTER to Continue.")
             curvature = 999999.9
