@@ -384,6 +384,7 @@ class ProgMesh:
         t = time.time()
         self.RawVertexCount = vertCount
         self.RawTriangleCount = faceCount
+        self.ReconstructionEstimate = 0
         print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
         del self.RawVerts[:]
         if isinstance(verts[0], RawVertex):
@@ -435,10 +436,13 @@ class ProgMesh:
         for u in self.vertices:
             if u.Vert.Position == v.Vert.Position:
 ##                if u.Vert.Normal != v.Vert.Normal:
+##                    self.ReconstructionEstimate = self.ReconstructionEstimate +1
 ##                    continue
-##                if self.Settings.ProtectTexture and not u.IsSameUV(v):
+                if self.Settings.ProtectTexture and not u.IsSameUV(v):
+                    self.ReconstructionEstimate = self.ReconstructionEstimate +1
 ##                    continue
-##                if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
+                if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
+                    self.ReconstructionEstimate = self.ReconstructionEstimate +1
 ##                    continue
                 del v
                 u.Duplicate = u.Duplicate+1
@@ -604,12 +608,13 @@ class ProgMesh:
         return
     def DoProgressiveMesh(self, ratio):
         t1 = time.time()
-        target = self.RawVertexCount * ratio
+        Goal_CollapseCount = self.RawVertexCount * (1.0 - ratio)
 #        print "DEBUG: DoProgressiveMesh(): ratio=%f, target=%f" % (ratio, target)
         CollapseList = list()
         new_Faces = list()
         new_Verts = list()
         del self.vertices[:]
+        self.ReconstructionEstimate = 0
         for i in range(0, self.RawVertexCount):
             v = CollapseVertex(self, i)
             if self.Settings.RemoveDuplicate:
@@ -619,7 +624,7 @@ class ProgMesh:
         for i in range(0, self.RawTriangleCount):
             t_ = self.RawTriangles[i]
             t = CollapseTriangle(self.vertices[t_.v1], self.vertices[t_.v2], self.vertices[t_.v3])
-            # reconstruct original UV/Normal/RGBA
+            # store original UV/Normal/RGBA
             RawCornerID = [self.RawTriangles[i].v1, self.RawTriangles[i].v2, self.RawTriangles[i].v3]
             for j in range(0, 3):
                 t.UV_list[j] = self.RawVerts[RawCornerID[j]].UV
@@ -628,6 +633,7 @@ class ProgMesh:
             self.triangles.append(t)
         i = 0
         j = 0
+        DuplicatesRemoved = 0
         while i < len(self.vertices):
             vert = self.vertices[i]
 #            print "DEBUG: DoProgressiveMesh(): vert.ID = %d, i = %d " % (i, j)
@@ -635,6 +641,7 @@ class ProgMesh:
 #            vert.LockBorder()
             if vert.Duplicate:
                 vert.Duplicate = vert.Duplicate-1
+                DuplicatesRemoved = DuplicatesRemoved+1
                 del self.vertices[i]
                 i = i-1
             i = i+1
@@ -657,7 +664,7 @@ class ProgMesh:
 ##            s = s + " " + str( co.ID )              
 ##        print "DEBUG: CollapseList (#%d): %s" % (len(CollapseList), s)
         CollapseCount = 0
-        while len(CollapseList) > target:
+        while len(CollapseList) > 0 and CollapseCount < Goal_CollapseCount:
             mn = CollapseList[-1]
 ##            if self.Settings.KeepBorder and mn.IsBorder():
 ##                print "  Stopping: v.ID[%d] is border." % (mn.ID)
@@ -675,7 +682,7 @@ class ProgMesh:
             CollapseCount = CollapseCount+1
             self.Collapse(mn, mn.Candidate, False)
             CollapseList.pop()
-        print "  Completed. [%d] vertices collapsed." % (CollapseCount)
+        print "  Completed. [%d] vertices collapsed, [%d] duplicates removed, [%d] estimated to be reconstructed." % (CollapseCount, DuplicatesRemoved, self.ReconstructionEstimate)
 
 ##        print "INSPECTION: self.vertices #=%d, self.triangles #=%d" % (len(self.vertices), len(self.triangles))
 ##        s = ""
@@ -687,46 +694,64 @@ class ProgMesh:
 ##            s = s + "[" + str(t.vertex[0].ID) + " " + str(t.vertex[1].ID) + " " + str(t.vertex[2].ID) + "] "
 ##        print "triangles: %s" % (s)        
 
-        i = 0
-        for v in self.vertices:
-            v.ID = i
-#            v.ComputeNormal()
-            new_Verts.append(v.Vert)
-            i = i+1
+##        i = 0
+##        for v in self.vertices:
+##            v.ID = i
+###            v.ComputeNormal()
+##            new_Verts.append(v.Vert)
+##            i = i+1
+#        print "DEBUG: current new_Verts (#%d)" % (len(new_Verts))
+        reconstructed_verts = 0
+        reuse_count = 0
+        existing_used = 0
         for t in self.triangles:
             face = list()
-            # Integrity Check
-            found_error = False
-            for i in [0,1,2]:
-                if t.vertex[i].ID >= len(self.vertices):
-                    if found_error is False:
-                        print "ERROR: triangle[%d] contains invalid v.ID: [%d %d %d]" % (self.triangles.index(t), t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
-                        found_error = True
+##            # Integrity Check
+##            found_error = False
+##            for i in [0,1,2]:
+##                if t.vertex[i].ID >= len(self.vertices):
+##                    if found_error is False:
+##                        print "ERROR: triangle[%d] contains invalid v.ID: [%d %d %d]" % (self.triangles.index(t), t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
+##                        found_error = True
 
             # Reconstruct merged vertices with different UV/Normal
             # 1. Check if Corner matchces Vertex
             for i in range(0,3):
-                if t.vertex[i].Vert.UV != t.UV_list[i] or t.vertex[i].Vert.Normal != t.Normal_list[i] or t.vertex[i].Vert.RGBA != t.RGBA_list[i]:
-                    # 2. make new vert
-                    new_v = RawVertex(Position=t.vertex[i].Vert.Position, Normal=t.Normal_list[i], RGBA=t.RGBA_list[i], UV=t.UV_list[i])
-                    new_ID = -1
-                    for existing_v in new_Verts:
-                        if new_v.Position == existing_v.Position and new_v.UV == existing_v.UV and new_v.RGBA == existing_v.RGBA and new_v.Normal == existing_v.Normal:
-                            new_ID = new_Verts.index(existing_v)
-                            print "Re-using reconstructed vert [%d]" % (new_ID)
-                            break
-                    if new_ID == -1:
-                        new_ID = len(new_Verts)
-                        print "Adding reconstructed vert [%d]" % (new_ID)
-                        new_Verts.append(new_v)
-                    face.append(new_ID)
-                else:
-                    face.append(t.vertex[i].ID)                        
+                # retrieve existing vert
+                working_v = t.vertex[i].Vert
+                
+                reconstruct_point = False
+                if self.Settings.ProtectTexture and t.vertex[i].Vert.UV != t.UV_list[i]:
+                    reconstruct_point = True
+                if self.Settings.ProtectColor and t.vertex[i].Vert.RGBA != t.RGBA_list[i]:
+                    reconstruct_point = True
 
+                if reconstruct_point:
+                    # 2. make new vert
+                    working_v = RawVertex(Position=t.vertex[i].Vert.Position, Normal=t.vertex[i].Vert.Normal, RGBA=t.RGBA_list[i], UV=t.UV_list[i])
+
+                # look up vert and add index
+                working_ID = -1
+                for existing_v in new_Verts:
+                    if working_v.Position == existing_v.Position and working_v.UV == existing_v.UV and working_v.RGBA == existing_v.RGBA:
+                        working_ID = new_Verts.index(existing_v)
+                        reuse_count = reuse_count +1
+#                            print "Re-using reconstructed vert [%d]" % (new_ID)
+                        break
+                if working_ID == -1:
+                    working_ID = len(new_Verts)
+                    reconstructed_verts = reconstructed_verts + 1
+#                        print "Adding reconstructed vert [%d]" % (new_ID)
+                    new_Verts.append(working_v)
+
+                face.append(working_ID)
+                
 ##            face.append(t.vertex[0].ID)
 ##            face.append(t.vertex[1].ID)
 ##            face.append(t.vertex[2].ID)
             new_Faces.append(face)
+
+#        print "DEBUG: %d Vertices reconstructed, %d Vertices reused, %d Existing verts used." % (reconstructed_verts, reuse_count, existing_used)
         result = len(new_Verts)
 
         t2 = time.time()
