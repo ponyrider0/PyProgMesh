@@ -295,25 +295,15 @@ class CollapseTriangle:
 ##    deleted = None
     def __init__(self, v1, v2, v3):
         self.normal = [0.0, 0.0, 0.0]
-#        del self.vertex[:]
         self.vertex = [v1, v2, v3]
-#        self.vertex.append(v1)
-#        self.vertex.append(v2)
-#        self.vertex.append(v3)
-##        print "================================="
-##        print "================================="
-##        print "DEBUG: CollapseTriangle creation: [%d, %d, %d]" % (v1.ID, v2.ID, v3.ID)
-##        print "================================="
-##        print "================================="
         for v_self in self.vertex:
 #            print "v[%d], v.ID=[%d]: AddFace()..." % (self.vertex.index(v_self), v_self.ID)
             v_self.AddFace(self)
-#        print "DEBUG: CollapseTriangle.ComputeNormal()"
         self.ComputeNormal()
-##        print "================================="
-##        print " END: CollapseTriangle creation."
-##        print "================================="
-##        return
+        self.UV_list = [v1.Vert.UV, v2.Vert.UV, v3.Vert.UV]
+        self.Normal_list = [v1.Vert.Normal, v2.Vert.Normal, v3.Vert.Normal]
+        self.RGBA_list = [v1.Vert.RGBA, v2.Vert.RGBA, v3.Vert.RGBA]
+        return
     def RemoveSelf(self):
 #        print "DEBUG: deleting CollapseTriangle [%d %d %d]" % (self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
         for v in self.vertex:
@@ -394,7 +384,7 @@ class ProgMesh:
         t = time.time()
         self.RawVertexCount = vertCount
         self.RawTriangleCount = faceCount
-#        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
+        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
         del self.RawVerts[:]
         if isinstance(verts[0], RawVertex):
             for i in range(0, vertCount):
@@ -444,12 +434,12 @@ class ProgMesh:
     def CheckDuplicate(self, v):
         for u in self.vertices:
             if u.Vert.Position == v.Vert.Position:
-                if u.Vert.Normal != v.Vert.Normal:
-                    continue
-                if self.Settings.ProtectTexture and not u.IsSameUV(v):
-                    continue
-                if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
-                    continue
+##                if u.Vert.Normal != v.Vert.Normal:
+##                    continue
+##                if self.Settings.ProtectTexture and not u.IsSameUV(v):
+##                    continue
+##                if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
+##                    continue
                 del v
                 u.Duplicate = u.Duplicate+1
                 return u
@@ -629,6 +619,12 @@ class ProgMesh:
         for i in range(0, self.RawTriangleCount):
             t_ = self.RawTriangles[i]
             t = CollapseTriangle(self.vertices[t_.v1], self.vertices[t_.v2], self.vertices[t_.v3])
+            # reconstruct original UV/Normal/RGBA
+            RawCornerID = [self.RawTriangles[i].v1, self.RawTriangles[i].v2, self.RawTriangles[i].v3]
+            for j in range(0, 3):
+                t.UV_list[j] = self.RawVerts[RawCornerID[j]].UV
+                t.Normal_list[j] = self.RawVerts[RawCornerID[j]].Normal
+                t.RGBA_list[j] = self.RawVerts[RawCornerID[j]].RGBA
             self.triangles.append(t)
         i = 0
         j = 0
@@ -694,7 +690,7 @@ class ProgMesh:
         i = 0
         for v in self.vertices:
             v.ID = i
-            v.ComputeNormal()
+#            v.ComputeNormal()
             new_Verts.append(v.Vert)
             i = i+1
         for t in self.triangles:
@@ -706,9 +702,30 @@ class ProgMesh:
                     if found_error is False:
                         print "ERROR: triangle[%d] contains invalid v.ID: [%d %d %d]" % (self.triangles.index(t), t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
                         found_error = True
-            face.append(t.vertex[0].ID)
-            face.append(t.vertex[1].ID)
-            face.append(t.vertex[2].ID)
+
+            # Reconstruct merged vertices with different UV/Normal
+            # 1. Check if Corner matchces Vertex
+            for i in range(0,3):
+                if t.vertex[i].Vert.UV != t.UV_list[i] or t.vertex[i].Vert.Normal != t.Normal_list[i] or t.vertex[i].Vert.RGBA != t.RGBA_list[i]:
+                    # 2. make new vert
+                    new_v = RawVertex(Position=t.vertex[i].Vert.Position, Normal=t.Normal_list[i], RGBA=t.RGBA_list[i], UV=t.UV_list[i])
+                    new_ID = -1
+                    for existing_v in new_Verts:
+                        if new_v.Position == existing_v.Position and new_v.UV == existing_v.UV and new_v.RGBA == existing_v.RGBA and new_v.Normal == existing_v.Normal:
+                            new_ID = new_Verts.index(existing_v)
+                            print "Re-using reconstructed vert [%d]" % (new_ID)
+                            break
+                    if new_ID == -1:
+                        new_ID = len(new_Verts)
+                        print "Adding reconstructed vert [%d]" % (new_ID)
+                        new_Verts.append(new_v)
+                    face.append(new_ID)
+                else:
+                    face.append(t.vertex[i].ID)                        
+
+##            face.append(t.vertex[0].ID)
+##            face.append(t.vertex[1].ID)
+##            face.append(t.vertex[2].ID)
             new_Faces.append(face)
         result = len(new_Verts)
 
@@ -743,7 +760,7 @@ def main():
     
     p = ProgMesh(vertCount=len(_verts), faceCount=len(_faces), verts=_verts, faces=_faces)
 
-    print "\n\n=========================================="
+    print "\n=========================================="
     print "ComputeProgressiveMesh()"
     print "=========================================="    
     p.ComputeProgressiveMesh()
@@ -758,30 +775,34 @@ def main():
 ##                s = s + " " + str(n.ID)
 ##            print "    v[%d].Neighbors (#%d): %s " % (f.vertex.index(v), len(n.Neighbors), s)
 
-    print "\n\n=========================================="
+    print "\n=========================================="
     print "DoProgressiveMesh()"
     print "=========================================="
-    numVerts, verts, numFaces, faces = p.DoProgressiveMesh(0.7)
-    # Inspection, Integrity Checks
-    print "INSPECTION:\n  DoProgressiveMesh() p.vertices = %d, p.triangles = %d" % ( len(p.vertices), len(p.triangles) )
-    for f in p.triangles:
-        v1, v2, v3 = f.vertex
-        print "  Triangle [%d]: [ %d, %d, %d ] " % ( p.triangles.index(f), v1.ID, v2.ID, v3.ID )
-        for v in f.vertex:
-            s = ""
-            for n in v.Neighbors:
-                s = s + " " + str(n.ID)
-            print "    v[%d], v.ID[%d].Neighbors (#%d): %s " % (f.vertex.index(v), v.ID, len(v.Neighbors), s)
-    print "RESULTS: vertices = %d, faces = %d " % (numVerts, numFaces)
-    s = ""
-    for v1 in verts:
-        v = v1.Position
-        s = s + "[" + str(v[0]) + ", " + str(v[1]) + ", " + str(v[2]) + "] "
-    print "verts: %s" % (s)
-    s = ""
-    for f in faces:
-        s = s + "[" + str(f[0]) + " " + str(f[1]) + " " + str(f[2]) + "] "
-    print "faces: %s" % (s)
+    result = p.DoProgressiveMesh(0.7)
+    if result == 0:
+        print "no decimation"
+    else:
+        numVerts, verts, numFaces, faces = result
+        # Inspection, Integrity Checks
+        print "INSPECTION:\n  DoProgressiveMesh() p.vertices = %d, p.triangles = %d" % ( len(p.vertices), len(p.triangles) )
+        for f in p.triangles:
+            v1, v2, v3 = f.vertex
+            print "  Triangle [%d]: [ %d, %d, %d ] " % ( p.triangles.index(f), v1.ID, v2.ID, v3.ID )
+            for v in f.vertex:
+                s = ""
+                for n in v.Neighbors:
+                    s = s + " " + str(n.ID)
+                print "    v[%d], v.ID[%d].Neighbors (#%d): %s " % (f.vertex.index(v), v.ID, len(v.Neighbors), s)
+        print "RESULTS: vertices = %d, faces = %d " % (numVerts, numFaces)
+        s = ""
+        for v1 in verts:
+            v = v1.Position
+            s = s + "[" + str(v[0]) + ", " + str(v[1]) + ", " + str(v[2]) + "] "
+        print "verts: %s" % (s)
+        s = ""
+        for f in faces:
+            s = s + "[" + str(f[0]) + " " + str(f[1]) + " " + str(f[2]) + "] "
+        print "faces: %s" % (s)
 
 
 if __name__ == '__main__':
