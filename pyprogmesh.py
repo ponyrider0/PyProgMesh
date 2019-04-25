@@ -671,6 +671,8 @@ class ProgMesh:
 ##        for co in CollapseList:
 ##            s = s + " " + str( co.ID )              
 ##        print "DEBUG: CollapseList (#%d): %s" % (len(CollapseList), s)
+        if (len(self.vertices) + self.ReconstructionEstimate) < (Goal_CollapseCount):
+            Goal_CollapseCount = len(self.vertices) * ratio
         CollapseCount = 0
         while len(CollapseList) > 0 and CollapseCount < Goal_CollapseCount:
             mn = CollapseList[-1]
@@ -712,6 +714,7 @@ class ProgMesh:
         reconstructed_verts = 0
         reuse_count = 0
         existing_used = 0
+        print "DEBUG: triangles: #%d" % (len(self.triangles))
         for t in self.triangles:
             face = list()
 ##            # Integrity Check
