@@ -9,6 +9,7 @@ from pyffi.utils.mathutils import vecNorm
 
 from collections import defaultdict
 import time
+import random
 
 class ProgMeshSettings:
     def __init__(self):
@@ -97,6 +98,8 @@ class CollapseVertex:
         self.Neighbors = list()
         self.Faces = list()
         self.n_costs = defaultdict(list)
+        self.MergeDestination = None
+        self.FaceToRawVertID = dict()
         return
     def RemoveSelf(self):
 #        print "DEBUG: deleting CollapseVertex v.ID[%d]" % (self.ID)
@@ -226,8 +229,8 @@ class CollapseVertex:
         return -1.0
     def IsSameUV(self, v):
         return (self.Vert.UV == v.Vert.UV)
-    def __eq__(self, v):
-        return (self.ID == v.ID and self.parent == v.parent)
+##    def __eq__(self, v):
+##        return (self.ID == v.ID and self.parent == v.parent)
     def __lt__(self, v):
         return (self.Cost > v.Cost)
     def ComputeCost(self, v):
@@ -263,8 +266,9 @@ class CollapseVertex:
             curvature = curvature * WEIGHT_BORDER
         if self.parent.Settings.ProtectTexture:
             if not self.IsSameUV(v):
-                WEIGHT_UV = 1.5
+                WEIGHT_UV = 2
                 curvature = curvature * WEIGHT_UV
+#                curvature = 1.0
         if self.parent.Settings.KeepBorder and self.IsBorder():
 #            raw_input("KEEP BORDER activated, Press ENTER to Continue.")
             curvature = 999999.9
@@ -445,11 +449,17 @@ class ProgMesh:
         for u in self.vertices:
             if u.Vert.Position == v.Vert.Position:
                 if u.Vert.Normal != v.Vert.Normal:
+                    # Preserve different Normal
+                    u.MergeDestination = v
                     continue
                 if self.Settings.ProtectTexture and not u.IsSameUV(v):
+                    # Preserve different UV
+                    u.MergeDestination = v
                     continue
                 if self.Settings.ProtectColor and u.Vert.RGBA != v.Vert.RGBA:
+                    u.MergeDestination = v
                     continue
+                print "DEBUG: CheckDuplicate() Deleting Duplicate."
                 del v
                 u.Duplicate = u.Duplicate+1
                 return u
@@ -484,9 +494,16 @@ class ProgMesh:
             self.RemoveVertex(u)
             return
 
-        # INTEGRITY CHECK
-        num_Faces = len(u.Faces)
-        
+        # check if u.FaceToRawVertID is initialized
+        if len(u.FaceToRawVertID) > 0:
+            # initialize v1 if needed
+            if len(v.FaceToRawVertID) == 0:
+                for f in v.Faces:
+                    v.FaceToRawVertID[f] = self.RawVerts.index(v.Vert)
+            # merge v0 into v1
+            for f in u.Faces:
+                v.FaceToRawVertID[f] = self.RawVerts.index(u.Vert)
+
 #        print "DEBUG: Collapse(): u[ID=%d] to v[ID=%d]" % (u.ID, v.ID)
         delete_list = list()
         replace_list = list()
@@ -499,27 +516,14 @@ class ProgMesh:
             else:
                 replace_list.append(f)
 
-        removed_Faces = 0
 #        print "  DEBUG: Collapse(): removing triangles (#%d)" % (len(delete_list))
         for f in delete_list:
 #            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
             self.RemoveTriangle(f)
-            removed_Faces = removed_Faces + 1
-
-        # INTEGRITY CHECK
-        remaining_Faces = len(u.Faces)
-#        print "Original Num Faces = %d, Removed Faces = %d, Remaining Faces = %d" % (num_Faces, removed_Faces, remaining_Faces)
-#        s = ""
-#        for f in u.Faces:
-#            s = s + ("f[%d][%d %d %d]  " % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID))
-#        print "INSPECTION: u.Face: %s" % (s)
 
 #        print "  DEBUG: Replacing Vertices in all u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
-
         for f in replace_list:
-#            print "  DEBUG: f[%d][%d %d %d] replacing vertex u[%d] with v[%d]" % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID, u.ID, v.ID)
             f.ReplaceVertex(u, v)
-#            print "  DEBUG: replacement completed."
 
         # INTEGRITY CHECK
 #        print "  DEBUG: last f is [%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
@@ -529,35 +533,35 @@ class ProgMesh:
 #        print "INSPECTION: u.Faces (#%d): %s" % (len(u.Faces), s)
 
         self.RemoveVertex(u)
-        self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
+        if recompute:
+            self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
 #        self.vertices.sort(cmp=SortByCost)
 #        print "============ COLLAPSE() completed. ====================="
         return
     def ComputeProgressiveMesh(self):
         t1 = time.time()
         del self.vertices[:]
-        t2 = time.time()
 #        print "DEBUG: ComputeProgressiveMesh(): RawVertexCount=%d" % (self.RawVertexCount)
         for i in range(0, self.RawVertexCount):
             v = CollapseVertex(self, i)
             if self.Settings.RemoveDuplicate:
                 v = self.CheckDuplicate(v)
             self.vertices.append(v)
-#        print "PROFILING: Generated self.vertices, completed in %f sec" % (time.time()-t2)
-##        # integrity check
-##        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
-##        for vert in self.vertices:
-##            if vert.ID > len(self.vertices):
-##                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
         del self.triangles[:]
-        t2 = time.time()
-#        print "DEBUG: Generating self.triangles (CollapseTriangle data), TriangleCount=%d" % (self.TriangleCount)
         for i in range(0, self.RawTriangleCount):
             t = CollapseTriangle(self.vertices[self.RawTriangles[i].v1], self.vertices[self.RawTriangles[i].v2], self.vertices[self.RawTriangles[i].v3])
             self.triangles.append(t)
-#        print "PROFILING: Generated self.triangles, completed in %f sec" % (time.time()-t2)
-        t2 = time.time()
-#        print "DEBUG: Re-index self.vertices... #=%d" % (len(self.vertices))
+        # Merge vertices with same Position but different Normal/UV/VC
+        for v0 in self.vertices:
+            if v0.MergeDestination is not None:
+                v1 = v0.MergeDestination
+                # check if v1 is initialized
+#                print "Store near-duplicate for regeneration"
+#                if len(v0.FaceToRawVertID) == 0:
+#                    for f in v0.Faces:
+#                        v0.FaceToRawVertID[f.UID] = self.RawVerts.index(v0.Vert)
+#                print "DEBUG: Collapsing near-duplicate"
+                self.Collapse(v0, v1)
         i = 0
         j = 0
         while i < len(self.vertices):
@@ -572,22 +576,13 @@ class ProgMesh:
                 i = i-1
             i = i+1
             j = j+1
-#        print "PROFILING: Re-index self.vertices, completed in %f sec" % (time.time()-t2)
-##        # integrity check
-##        print "INTEGRITY CHECK: self.vertices #=%d" % (len(self.vertices))
-##        for vert in self.vertices:
-##            if vert.ID > len(self.vertices):
-##                print "ERROR FOUND: vert.ID = %d at index=%d" % (vert.ID, self.vertices.index(vert))
-#        print "DEBUG: vert.ID (max) = %d" % (i-1)
         self.ComputeAllEdgeCollapseCosts()
-#        self.CollapseOrder.clear()
         del self.CollapseOrder[:]
         t2 = time.time()
 #        print "DEBUG: Generating self.CollapseOrder ..."
-        for i in range(0, len(self.vertices)):
-            self.CollapseOrder.append([0,0])
         costMap = list()
         for i in range(0, len(self.vertices)):
+            self.CollapseOrder.append([0,0])
             v = self.vertices[i]
             costMap.append(v.Cost)
         self.CollapseMap.clear()
@@ -630,6 +625,17 @@ class ProgMesh:
             t_ = self.RawTriangles[i]
             t = CollapseTriangle(self.vertices[t_.v1], self.vertices[t_.v2], self.vertices[t_.v3])
             self.triangles.append(t)
+        # Merge vertices with same Position but different Normal/UV/VC
+        for v0 in self.vertices:
+            if v0.MergeDestination is not None:
+                v1 = v0.MergeDestination
+                # check if v1 is initialized
+#                print "Store near-duplicate for regeneration"
+                if len(v0.FaceToRawVertID) == 0:
+                    for f in v0.Faces:
+                        v0.FaceToRawVertID[f] = self.RawVerts.index(v0.Vert)
+#                print "DEBUG: Collapsing near-duplicate"
+                self.Collapse(v0, v1)
         i = 0
         j = 0
         while i < len(self.vertices):
@@ -697,18 +703,49 @@ class ProgMesh:
             v.ComputeNormal()
             new_Verts.append(v.Vert)
             i = i+1
+        regenerated_verts = 0
         for t in self.triangles:
             face = list()
-            # Integrity Check
-            found_error = False
-            for i in [0,1,2]:
-                if t.vertex[i].ID >= len(self.vertices):
-                    if found_error is False:
-                        print "ERROR: triangle[%d] contains invalid v.ID: [%d %d %d]" % (self.triangles.index(t), t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
-                        found_error = True
-            face.append(t.vertex[0].ID)
-            face.append(t.vertex[1].ID)
-            face.append(t.vertex[2].ID)
+##            # Integrity Check
+##            found_error = False
+##            for i in [0,1,2]:
+##                if t.vertex[i].ID >= len(self.vertices):
+##                    if found_error is False:
+##                        print "ERROR: triangle[%d] contains invalid v.ID: [%d %d %d]" % (self.triangles.index(t), t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
+##                        found_error = True
+            # check to see if need to regenerate separate vertex for separate UV/VC
+            for i in range(0, 3):
+                v = t.vertex[i]
+                if len(v.FaceToRawVertID) > 0:
+                    if t not in v.FaceToRawVertID.keys():
+                        face.append(v.ID)
+                        continue
+#                    s = ""
+#                    for vf in v.FaceToRawVertID.keys():
+#                        s = s + ("f[%d %d %d] " % (vf.vertex[0].ID, vf.vertex[1].ID, vf.vertex[2].ID))
+#                    print "DEBUG: v.FaceToRawVertID (#%d): %s" % (len(v.FaceToRawVertID), s)
+                    if self.RawVerts.index(v.Vert) != v.FaceToRawVertID[t]:
+                        # create new vertex
+                        new_ID = len(new_Verts)
+                        new_v = self.RawVerts[v.FaceToRawVertID[t]]
+                        # Integrity Check
+                        if new_v.Position != v.Vert.Position:
+#                            print "ERROR: position difference detected in regenerated vertex: regenerated [%f, %f, %f] vs original [%f, %f, %f]" % (new_v.Position[0],new_v.Position[1],new_v.Position[2], v.Vert.Position[0],v.Vert.Position[1],v.Vert.Position[2])
+#                            raw_input("Press ENTER to continue.")
+                            new_v.Position = v.Vert.Position
+                        # check new_Verts to see if already present, otherwise add
+                        if new_v in new_Verts:
+                            new_ID = new_Verts.index(new_v)
+                        else:
+                            new_Verts.append(new_v)
+                            regenerated_verts = regenerated_verts + 1
+                            print "DEBUG: regenerating vertex (#%d)... t[%d %d %d] ...." % (regenerated_verts, t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
+                        face.append(new_ID)
+                        continue
+                face.append(v.ID)
+##            face.append(t.vertex[0].ID)
+##            face.append(t.vertex[1].ID)
+##            face.append(t.vertex[2].ID)
             new_Faces.append(face)
         result = len(new_Verts)
 
