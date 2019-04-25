@@ -9,6 +9,7 @@ from pyffi.utils.mathutils import vecNorm
 
 from collections import defaultdict
 import time
+import math
 
 class ProgMeshSettings:
     def __init__(self):
@@ -402,6 +403,13 @@ class ProgMesh:
 #            print "DEBUG: Face: [%d, %d, %d]" % (f[0], f[1], f[2])
 #        print "PROFILING: completed in %f sec" % (time.time() - t)
         return
+    def UVCloseEnough(self, a, b):
+        # 1. vecSub(a,b), 2. vecNorm < threshold
+        difference = vecSub(a, b)
+        distance = vecNorm(difference)
+        if distance < (1.412135/2):
+            return True
+        return False
     def HasVertex(self, v):
         if v in self.vertices:
             return True
@@ -721,27 +729,33 @@ class ProgMesh:
                 working_v = t.vertex[i].Vert
                 
                 reconstruct_point = False
-                if self.Settings.ProtectTexture and t.vertex[i].Vert.UV != t.UV_list[i]:
+                if self.Settings.ProtectTexture and not self.UVCloseEnough(t.vertex[i].Vert.UV, t.UV_list[i]):
+#                    print "UV difference unacceptable... reconstructing"
                     reconstruct_point = True
                 if self.Settings.ProtectColor and t.vertex[i].Vert.RGBA != t.RGBA_list[i]:
+#                    print "RGB difference unacceptable... reconstructing"
                     reconstruct_point = True
 
                 if reconstruct_point:
                     # 2. make new vert
                     working_v = RawVertex(Position=t.vertex[i].Vert.Position, Normal=t.vertex[i].Vert.Normal, RGBA=t.RGBA_list[i], UV=t.UV_list[i])
-
+                    
                 # look up vert and add index
                 working_ID = -1
                 for existing_v in new_Verts:
-                    if working_v.Position == existing_v.Position and working_v.UV == existing_v.UV and working_v.RGBA == existing_v.RGBA:
+                    if working_v.Position == existing_v.Position and self.UVCloseEnough(working_v.UV, existing_v.UV) and working_v.RGBA == existing_v.RGBA:
                         working_ID = new_Verts.index(existing_v)
-                        reuse_count = reuse_count +1
-#                            print "Re-using reconstructed vert [%d]" % (new_ID)
+                        if reconstruct_point:
+                            reuse_count = reuse_count +1
+                        else:
+                            existing_used = existing_used + 1
+#                       print "Re-using reconstructed vert [%d]" % (new_ID)
                         break
                 if working_ID == -1:
                     working_ID = len(new_Verts)
-                    reconstructed_verts = reconstructed_verts + 1
-#                        print "Adding reconstructed vert [%d]" % (new_ID)
+                    if reconstruct_point:
+                        reconstructed_verts = reconstructed_verts + 1
+#                   print "Adding reconstructed vert [%d]" % (new_ID)
                     new_Verts.append(working_v)
 
                 face.append(working_ID)
@@ -751,7 +765,7 @@ class ProgMesh:
 ##            face.append(t.vertex[2].ID)
             new_Faces.append(face)
 
-#        print "DEBUG: %d Vertices reconstructed, %d Vertices reused, %d Existing verts used." % (reconstructed_verts, reuse_count, existing_used)
+        print "DEBUG: %d Vertices reconstructed, %d reconstructed reused, %d existing reused" % (reconstructed_verts, reuse_count, existing_used)
         result = len(new_Verts)
 
         t2 = time.time()
