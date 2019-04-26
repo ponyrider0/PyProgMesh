@@ -88,6 +88,7 @@ class CollapseVertex:
 ##    n_costs = None
 ##    border = False
     def __init__(self, _parent, _ID, _use_cost=False):
+        self.deleted = False
         self.parent = _parent
         self.ID = _ID
         self.use_cost = _use_cost
@@ -101,6 +102,7 @@ class CollapseVertex:
         self.n_costs = defaultdict(list)
         return
     def RemoveSelf(self):
+        self.deleted = True
 #        print "DEBUG: deleting CollapseVertex v.ID[%d]" % (self.ID)
         if len(self.Faces) != 0:
             s = ""
@@ -108,9 +110,13 @@ class CollapseVertex:
                 s = s + ("f[%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)) + " "
             print "ASSERTION FAILURE: vertex[ID=%d] deleted without removal of all faces (#%d): %s" % (self.ID, len(self.Faces), s)
 #            raw_input("PRESS ENTER TO CONTINUE.\n")
-        for n in self.Neighbors:
+##        for n in self.Neighbors:
+##            n.RemoveNeighbor(self)
+##            self.Neighbors.remove(n)
+        while len(self.Neighbors) > 0:
+            n = self.Neighbors[-1]
             n.RemoveNeighbor(self)
-            self.Neighbors.remove(n)
+            self.Neighbors.pop()
     def IsNeighbor(self, v):
         if v in self.Neighbors:
             return True
@@ -173,7 +179,7 @@ class CollapseVertex:
     def IsBorder(self):
         return self.border
     def LockBorder(self):
-        # for each neighbor, see if neighbor shares more than one face with self
+        # for each neighbor vertex, see if neighbor shares exactly one face with self
         self.border = False
         for n in self.Neighbors:
             num_shared_faces = 0
@@ -296,6 +302,7 @@ class CollapseTriangle:
 ##    normal = None
 ##    deleted = None
     def __init__(self, v1, v2, v3):
+        self.deleted = False
         self.normal = [0.0, 0.0, 0.0]
         self.vertex = [v1, v2, v3]
         for v_self in self.vertex:
@@ -307,6 +314,7 @@ class CollapseTriangle:
         self.RGBA_list = [v1.Vert.RGBA, v2.Vert.RGBA, v3.Vert.RGBA]
         return
     def RemoveSelf(self):
+        self.deleted = True
 #        print "DEBUG: deleting CollapseTriangle [%d %d %d]" % (self.vertex[0].ID, self.vertex[1].ID, self.vertex[2].ID)
         for v in self.vertex:
             if v is None:
@@ -384,7 +392,7 @@ class ProgMesh:
         self.CollapseMap = dict()
         self.RawTriangles = list()
         self.RawVerts = list()
-        t = time.time()
+#        t = time.time()
         self.RawVertexCount = vertCount
         self.RawTriangleCount = faceCount
         self.ReconstructionEstimate = 0
@@ -414,24 +422,28 @@ class ProgMesh:
             return True
         return False
     def HasVertex(self, v):
+        if v.deleted:
+            return False
         if v in self.vertices:
             return True
         return False
     def RemoveVertex(self, v):
         if self.HasVertex(v):
 #            print "  DEBUG: RemoveVertex(): ID=%d" % (v.ID)
-            self.vertices.remove(v)
+#            self.vertices.remove(v)
             v.RemoveSelf()
             del v
         return
     def HasTriangle(self, t):
+        if t.deleted:
+            return False
         if t in self.triangles:
             return True
         return False
     def RemoveTriangle(self, t):
         if self.HasTriangle(t):
 #            print "  DEBUG: RemoveTriangle(): [%d %d %d]" % (t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
-            self.triangles.remove(t)
+#            self.triangles.remove(t)
             t.RemoveSelf()
             del t
         return
@@ -474,9 +486,11 @@ class ProgMesh:
             v.AddCost(cost, neighbor)
         return
     def ComputeAllEdgeCollapseCosts(self):
-        t1 = time.time()
+#        t1 = time.time()
 #        print "DEBUG: ComputeAllEdgeCollapseCosts(): ..."
         for vert in self.vertices:
+            if vert.deleted:
+                continue
             self.ComputeEdgeCostAtVertex(vert)
 #            print "DEBUG: v[%d], Candidate=[%d], Cost=%f" % (vert.ID, vert.Candidate.ID, vert.Cost)
         self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
@@ -489,61 +503,32 @@ class ProgMesh:
             self.RemoveVertex(u)
             return
 
-        # INTEGRITY CHECK
-        num_Faces = len(u.Faces)
-        
-#        print "DEBUG: Collapse(): u[ID=%d] to v[ID=%d]" % (u.ID, v.ID)
         delete_list = list()
         replace_list = list()
-#        print "  INSPECTING u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
         for f in u.Faces:
-#            print "  INSPECTING u[ID=%d].face [%d %d %d]..." % (u.ID, f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
             if f.HasVertex(v):
-#                print "    u.face contains v[ID=%d]" % (v.ID)
                 delete_list.append(f)
             else:
                 replace_list.append(f)
 
-        removed_Faces = 0
-#        print "  DEBUG: Collapse(): removing triangles (#%d)" % (len(delete_list))
         for f in delete_list:
 #            print "  DEBUG: Collapse(%d to %d): removing triangle [%d %d %d]" % (u.ID, v.ID, f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
             self.RemoveTriangle(f)
-            removed_Faces = removed_Faces + 1
-
-        # INTEGRITY CHECK
-        remaining_Faces = len(u.Faces)
-#        print "Original Num Faces = %d, Removed Faces = %d, Remaining Faces = %d" % (num_Faces, removed_Faces, remaining_Faces)
-#        s = ""
-#        for f in u.Faces:
-#            s = s + ("f[%d][%d %d %d]  " % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID))
-#        print "INSPECTION: u.Face: %s" % (s)
-
-#        print "  DEBUG: Replacing Vertices in all u[ID=%d].Faces (#%d)" % (u.ID, len(u.Faces))
 
         for f in replace_list:
 #            print "  DEBUG: f[%d][%d %d %d] replacing vertex u[%d] with v[%d]" % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID, u.ID, v.ID)
             f.ReplaceVertex(u, v)
-#            print "  DEBUG: replacement completed."
-
-        # INTEGRITY CHECK
-#        print "  DEBUG: last f is [%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)
-#        s = ""
-#        for f in u.Faces:
-#            s = s + ("f[%d][%d %d %d]  " % (u.Faces.index(f), f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID))
-#        print "INSPECTION: u.Faces (#%d): %s" % (len(u.Faces), s)
 
         self.RemoveVertex(u)
 
         if recompute:
             self.vertices.sort(key=lambda vert: vert.Cost, reverse=True)
 #        self.vertices.sort(cmp=SortByCost)
-#        print "============ COLLAPSE() completed. ====================="
         return
     def ComputeProgressiveMesh(self):
         t1 = time.time()
         del self.vertices[:]
-        t2 = time.time()
+#        t2 = time.time()
 #        print "DEBUG: ComputeProgressiveMesh(): RawVertexCount=%d" % (self.RawVertexCount)
         for i in range(0, self.RawVertexCount):
             v = CollapseVertex(self, i)
@@ -552,13 +537,13 @@ class ProgMesh:
             self.vertices.append(v)
 #        print "PROFILING: Generated self.vertices, completed in %f sec" % (time.time()-t2)
         del self.triangles[:]
-        t2 = time.time()
+#        t2 = time.time()
 #        print "DEBUG: Generating self.triangles (CollapseTriangle data), TriangleCount=%d" % (self.TriangleCount)
         for i in range(0, self.RawTriangleCount):
             t = CollapseTriangle(self.vertices[self.RawTriangles[i].v1], self.vertices[self.RawTriangles[i].v2], self.vertices[self.RawTriangles[i].v3])
             self.triangles.append(t)
 #        print "PROFILING: Generated self.triangles, completed in %f sec" % (time.time()-t2)
-        t2 = time.time()
+#        t2 = time.time()
 #        print "DEBUG: Re-index self.vertices... #=%d" % (len(self.vertices))
         i = 0
         j = 0
@@ -580,7 +565,7 @@ class ProgMesh:
 #        self.CollapseOrder.clear()
         del self.CollapseOrder[:]
         t2 = time.time()
-#        print "DEBUG: Generating self.CollapseOrder ..."
+        print "DEBUG: Generating self.CollapseOrder ..."
         for i in range(0, len(self.vertices)):
             self.CollapseOrder.append([0,0])
         costMap = list()
@@ -590,6 +575,9 @@ class ProgMesh:
         self.CollapseMap.clear()
         while len(self.vertices) is not 0:
             mn = self.vertices[-1]
+            if mn.deleted:
+                self.vertices.pop()
+                continue
             cv = mn.Candidate
 #            print "DEBUG: ComputeProgressiveMesh(): mn.ID = %d, i = %d" % (mn.ID, len(self.vertices)-1)
             self.CollapseOrder[len(self.vertices)-1] = [mn.ID, costMap[len(self.vertices)-1] ]
@@ -598,16 +586,16 @@ class ProgMesh:
             else:
                 self.CollapseMap[mn.ID] = -1
             self.Collapse(mn, cv)
-##        s = ''
+#        s = ''
 ##        for co in self.CollapseOrder:
 ##            s = s + ("v[%d](c=%f) " % (co[0], co[1]))
 ##        print "CollapseOrder (#%d): %s" % (len(self.CollapseOrder), s)
-#        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
-        t2 = time.time()
-        print "PROFILING: ComputeProgressiveMesh(): completed in %f sec" % (t2-t1)
+        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
+#        t2 = time.time()
+        print "PROFILING: ComputeProgressiveMesh(): completed in %f sec" % (time.time()-t1)
         return
     def DoProgressiveMesh(self, ratio):
-        t1 = time.time()
+#        t1 = time.time()
         Goal_CollapseCount = self.RawVertexCount * (1.0 - ratio)
 #        print "DEBUG: DoProgressiveMesh(): ratio=%f, target=%f" % (ratio, target)
         CollapseList = list()
@@ -663,6 +651,7 @@ class ProgMesh:
 ##        for co in CollapseList:
 ##            s = s + " " + str( co.ID )              
 ##        print "DEBUG: CollapseList (#%d): %s" % (len(CollapseList), s)
+        t2 = time.time()
         percent_removed = (DuplicatesRemoved*1.0)/(self.RawVertexCount*1.0)
         if (percent_removed) > 0.10 :
 #            print "Recalculating goal"
@@ -680,7 +669,8 @@ class ProgMesh:
             CollapseCount = CollapseCount+1
             self.Collapse(mn, mn.Candidate, False)
             CollapseList.pop()
-        print "  Completed. [%d] vertices collapsed, [%d] duplicates removed, [%d] estimated to be reconstructed." % (CollapseCount, DuplicatesRemoved, self.ReconstructionEstimate)
+#        print "  Completed. [%d] vertices collapsed, [%d] duplicates removed, [%d] estimated to be reconstructed." % (CollapseCount, DuplicatesRemoved, self.ReconstructionEstimate)
+        print "PROFILING: Collapsed CollapseList by (#%d), completed in %f sec" % (CollapseCount, time.time() - t2)
 
 ##        print "INSPECTION: self.vertices #=%d, self.triangles #=%d" % (len(self.vertices), len(self.triangles))
 ##        s = ""
@@ -695,6 +685,8 @@ class ProgMesh:
         if not self.Settings.ReconstructVert:
             i = 0
             for v in self.vertices:
+                if v.deleted:
+                    continue
                 v.ID = i
     #            v.ComputeNormal()
                 new_Verts.append(v.Vert)
@@ -706,6 +698,8 @@ class ProgMesh:
         existing_used = 0
         print "DEBUG: triangles: #%d" % (len(self.triangles))
         for t in self.triangles:
+            if t.deleted:
+                continue
             face = list()
             if not self.Settings.ReconstructVert:
                 face.append(t.vertex[0].ID)
@@ -750,8 +744,9 @@ class ProgMesh:
 #        print "DEBUG: %d Vertices reconstructed, %d reconstructed reused, %d existing reused" % (reconstructed_verts, reuse_count, existing_used)
         result = len(new_Verts)
 
-        t2 = time.time()
-        print " Block decimation completed: [%d] original vertices: [%d] collapsed, [%d] duplicates removed, [%d] reconstructed. Processing time: %.2f sec" % (self.RawVertexCount, CollapseCount, DuplicatesRemoved, reconstructed_verts, t2 - self.StartTime)
+#        t2 = time.time()
+        print " Block decimation completed: [%d] original vertices: [%d] collapsed, [%d] duplicates removed, [%d] reconstructed. Processing time: %.2f sec" % \
+              (self.RawVertexCount, CollapseCount, DuplicatesRemoved, reconstructed_verts, time.time() - self.StartTime)
         if result == 0:
             print "No new_Verts"
             return 0
