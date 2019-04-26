@@ -106,7 +106,7 @@ class CollapseVertex:
             for f in self.Faces:
                 s = s + ("f[%d %d %d]" % (f.vertex[0].ID, f.vertex[1].ID, f.vertex[2].ID)) + " "
             print "ASSERTION FAILURE: vertex[ID=%d] deleted without removal of all faces (#%d): %s" % (self.ID, len(self.Faces), s)
-            raw_input("PRESS ENTER TO CONTINUE.\n")
+#            raw_input("PRESS ENTER TO CONTINUE.\n")
         for n in self.Neighbors:
             n.RemoveNeighbor(self)
             self.Neighbors.remove(n)
@@ -161,7 +161,7 @@ class CollapseVertex:
     def RemoveFace(self, f):
         if f.HasVertex(self) == False:
             print "ASSERTION FAILURE: v[%d].RemoveFace() face [%d %d %d] does not contain this vertex" % (self.ID, f.vertex[0], f.vertex[1], f.vertex[2])
-            raw_input("PRESS ENTER TO CONTINUE.\n")
+#            raw_input("PRESS ENTER TO CONTINUE.\n")
         if self.IsFace(f):
             self.Faces.remove(f)
             for v in f.vertex:
@@ -328,7 +328,7 @@ class CollapseTriangle:
                 continue
             if v_self.IsNeighbor(u) == False:
                 print "ASSERTION FAILURE: ReplaceVertex(%d to %d): v_self.ID[%d] is not Neighbor to u.ID[%d]" % (u.ID, v.ID, v_self.ID, u.ID)
-                raw_input("PRESS ENTER TO CONTINUE.\n")
+#                raw_input("PRESS ENTER TO CONTINUE.\n")
             v_self.RemoveIfNotNeighbor(u)
             v_self.AddNeighbor(v)
         self.ComputeNormal()
@@ -376,6 +376,7 @@ class ProgMesh:
             self.Settings = settings
         else:
             self.Settings = ProgMeshSettings()
+        self.StartTime = time.time()
         self.vertices = list()
         self.triangles = list()
         self.CollapseOrder = list()
@@ -386,7 +387,7 @@ class ProgMesh:
         self.RawVertexCount = vertCount
         self.RawTriangleCount = faceCount
         self.ReconstructionEstimate = 0
-        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
+#        print "DEBUG: ProgMesh.init(): vertCount=%d, faceCount=%d, num verts=%d, num faces=%d" % (vertCount, faceCount, len(verts), len(faces))
         del self.RawVerts[:]
         if isinstance(verts[0], RawVertex):
             for i in range(0, vertCount):
@@ -612,7 +613,7 @@ class ProgMesh:
 ##        print "CollapseOrder (#%d): %s" % (len(self.CollapseOrder), s)
 #        print "PROFIING: Generated self.CollapseOrder, completed in %f sec" % (time.time()-t2)
         t2 = time.time()
-        print "PROFILING: ComputeProgressiveMesh(): completed in %f sec" % (t2-t1)
+#        print "PROFILING: ComputeProgressiveMesh(): completed in %f sec" % (t2-t1)
         return
     def DoProgressiveMesh(self, ratio):
         t1 = time.time()
@@ -671,10 +672,10 @@ class ProgMesh:
 ##        for co in CollapseList:
 ##            s = s + " " + str( co.ID )              
 ##        print "DEBUG: CollapseList (#%d): %s" % (len(CollapseList), s)
-        if (len(self.vertices) + self.ReconstructionEstimate) < (Goal_CollapseCount):
-            Goal_CollapseCount = len(self.vertices) * ratio
+        if len(self.vertices) < Goal_CollapseCount:
+            Goal_CollapseCount = len(self.vertices) * (1-ratio)
         CollapseCount = 0
-        while len(CollapseList) > 0 and CollapseCount < Goal_CollapseCount:
+        while len(CollapseList) > 5 and CollapseCount < Goal_CollapseCount:
             mn = CollapseList[-1]
 ##            if self.Settings.KeepBorder and mn.IsBorder():
 ##                print "  Stopping: v.ID[%d] is border." % (mn.ID)
@@ -768,11 +769,11 @@ class ProgMesh:
 ##            face.append(t.vertex[2].ID)
             new_Faces.append(face)
 
-        print "DEBUG: %d Vertices reconstructed, %d reconstructed reused, %d existing reused" % (reconstructed_verts, reuse_count, existing_used)
+#        print "DEBUG: %d Vertices reconstructed, %d reconstructed reused, %d existing reused" % (reconstructed_verts, reuse_count, existing_used)
         result = len(new_Verts)
 
         t2 = time.time()
-        print "PROFILING: DoProgressiveMesh(): completed in %f sec" % (t2-t1)
+        print " Block decimation completed: [%d] original vertices: [%d] collapsed, [%d] duplicates removed, [%d] reconstructed. Processing time: %.2f sec" % (self.RawVertexCount, CollapseCount, DuplicatesRemoved, reconstructed_verts, t2 - self.StartTime)
         if result == 0:
             print "No new_Verts"
             return 0
