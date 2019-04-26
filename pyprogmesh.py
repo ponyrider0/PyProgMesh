@@ -203,7 +203,7 @@ class CollapseVertex:
         if (c < self.Cost) or (self.Candidate is None):
             self.Cost = c
 #            print "DEBUG: assigning self.Candidate"
-            self.Candidate = v
+            self.Candidate = self.n_costs[c][-1]
         return
     def RemoveCost(self, v):
         for c, verts in self.n_costs.items():
@@ -211,19 +211,25 @@ class CollapseVertex:
                 verts.remove(v)
                 if (len(verts) == 0):
                     del self.n_costs[c]
-#                break
-                continue
+                break
         if self.Candidate == v:
             if len(self.n_costs) == 0:
                 self.Cost = -1.0
                 self.Candidate = None
             else:
+                # select new Candidate with lowest cost
                 if len(verts) > 0:
                     self.Cost = c
-                    self.Candidate = verts[0]
+                    self.Candidate = verts[-1]
                 else:
-                    self.Cost, verts = self.n_costs.items()[0]
-                    self.Candidate = verts[0]
+                    lowest_cost = None
+                    for c in self.n_costs.keys():
+                        if lowest_cost is None:
+                            lowest_cost = c
+                        if c < lowest_cost:
+                            lowest_cost = c
+                    self.Cost = lowest_cost
+                    self.Candidate = self.n_costs[lowest_cost][-1]
         return
     def GetCost(self, v):
         if not self.use_cost:
@@ -427,6 +433,12 @@ class ProgMesh:
         if v in self.vertices:
             return True
         return False
+############################################
+# RemoveVertex() optimized to avoid calling self.vertices.remove()
+#   Only use in final stages aka Collapse(), after vertex/triangle generation
+#   self.vertices can not be accessed by index after calling this, must
+#   iterate through and skip elements with .deleted == True
+############################################
     def RemoveVertex(self, v):
         if self.HasVertex(v):
 #            print "  DEBUG: RemoveVertex(): ID=%d" % (v.ID)
@@ -440,6 +452,12 @@ class ProgMesh:
         if t in self.triangles:
             return True
         return False
+############################################
+# RemoveTriangle() optimized to avoid calling self.triangles.remove()
+#   Only use in final stages aka Collapse(), after vertex/triangle generation
+#   self.triangles can not be accessed by index after calling this, must
+#   iterate through and skip elements with .deleted == True
+############################################
     def RemoveTriangle(self, t):
         if self.HasTriangle(t):
 #            print "  DEBUG: RemoveTriangle(): [%d %d %d]" % (t.vertex[0].ID, t.vertex[1].ID, t.vertex[2].ID)
